@@ -24,40 +24,20 @@ class ExternalLLMExpansion:
         Initialize the external LLM expansion engine
         
         Args:
-            api_key: DeepSeek API key. If None, will try to load from environment
+            api_key: DeepSeek API key. If None, will try to load from config
             api_base: DeepSeek API base URL. Defaults to https://api.deepseek.com
         """
-        # Load from .env file if it exists
-        self.load_env_file()
+        # Get API credentials from parameters or config
+        import modules.config
         
-        # Get API credentials
-        self.api_key = api_key or os.getenv('DEEPSEEK_API_KEY')
-        self.api_base = api_base or os.getenv('DEEPSEEK_API_BASE', 'https://api.deepseek.com')
+        self.api_key = api_key or modules.config.deepseek_api_key
+        self.api_base = api_base or modules.config.deepseek_api_base
         
-        if not self.api_key:
-            print('[External LLM Expansion] Warning: DEEPSEEK_API_KEY not found. External expansion will not work.')
-            print('[External LLM Expansion] Please set DEEPSEEK_API_KEY in .env file or environment variables.')
+        if not self.api_key or self.api_key == '':
+            print('[External LLM Expansion] Warning: deepseek_api_key not found in config.txt. External expansion will not work.')
+            print('[External LLM Expansion] Please add "deepseek_api_key": "your_key_here" to config.txt')
         else:
             print('[External LLM Expansion] DeepSeek API initialized successfully.')
-    
-    def load_env_file(self):
-        """Load environment variables from .env file if it exists"""
-        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
-        if os.path.exists(env_path):
-            try:
-                with open(env_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith('#') and '=' in line:
-                            key, value = line.split('=', 1)
-                            key = key.strip()
-                            value = value.strip()
-                            # Only set if not already in environment
-                            if key not in os.environ:
-                                os.environ[key] = value
-                print(f'[External LLM Expansion] Loaded environment from {env_path}')
-            except Exception as e:
-                print(f'[External LLM Expansion] Failed to load .env file: {e}')
     
     def is_available(self) -> bool:
         """Check if the external LLM expansion is available"""

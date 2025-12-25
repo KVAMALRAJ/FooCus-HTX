@@ -706,6 +706,19 @@ default_use_external_llm_expansion = get_config_item_or_set_default(
     validator=lambda x: isinstance(x, bool),
     expected_type=bool
 )
+deepseek_api_key = get_config_item_or_set_default(
+    key='deepseek_api_key',
+    default_value='',
+    validator=lambda x: isinstance(x, str),
+    disable_empty_as_none=True,
+    expected_type=str
+)
+deepseek_api_base = get_config_item_or_set_default(
+    key='deepseek_api_base',
+    default_value='https://api.deepseek.com',
+    validator=lambda x: isinstance(x, str),
+    expected_type=str
+)
 
 default_inpaint_mask_sam_model = get_config_item_or_set_default(
     key='default_inpaint_mask_sam_model',

@@ -25,23 +25,22 @@ pip install requests==2.31.0
 2. Sign up for an account
 3. Generate an API key from your dashboard
 
-### 3. Configure API Key
+### 3. Configure API Key in config.txt
 
-Create a `.env` file in the Fooocus root directory (where `launch.py` is located):
+Edit your `config.txt` file and add your DeepSeek API credentials:
 
-```bash
-# Copy the example file
-cp .env.example .env
+```json
+{
+  "deepseek_api_key": "sk-your-actual-api-key-here",
+  "deepseek_api_base": "https://api.deepseek.com",
+  "default_use_external_llm_expansion": false
+}
 ```
 
-Edit `.env` and add your DeepSeek API key:
-
-```env
-DEEPSEEK_API_KEY=your_actual_api_key_here
-DEEPSEEK_API_BASE=https://api.deepseek.com
-```
-
-**Important:** The `.env` file should NOT be committed to git. It's already in `.gitignore` (if not, add it).
+**Notes:**
+- `deepseek_api_base` is optional (defaults to `https://api.deepseek.com`)
+- `default_use_external_llm_expansion` sets whether the checkbox is enabled by default
+- The file will be created after first launch if it doesn't exist
 
 ### 4. Enable in UI
 
@@ -104,26 +103,36 @@ User enters prompt → Enable expansion + External LLM checkbox?
 
 ### In config.txt
 
-Add to your `config.txt` to change the default behavior:
+Add these settings to your `config.txt`:
 
 ```json
 {
+  "deepseek_api_key": "your_key_here",
+  "deepseek_api_base": "https://api.deepseek.com",
   "default_use_external_llm_expansion": true
 }
 ```
 
-### Environment Variables
+### Environment Variables (Alternative)
 
-You can also set these via environment variables:
+While config.txt is the recommended method, you can also set via environment variables:
 
 ```bash
+# Add to config.txt
 export DEEPSEEK_API_KEY="your_key_here"
-export DEEPSEEK_API_BASE="https://api.deepseek.com"
 ```
 
-## Troubleshooting
+## Trdeepseek_api_key not found" Warning
 
-### "DEEPSEEK_API_KEY not found" Warning
+**Solution:** Add your API key to `config.txt` (see Setup step 3)
+
+Example config.txt:
+```json
+{
+  "deepseek_api_key": "sk-1234567890abcdef",
+  "deepseek_api_base": "https://api.deepseek.com"
+}
+```
 
 **Solution:** Create a `.env` file with your API key (see Setup step 3)
 
@@ -132,7 +141,7 @@ export DEEPSEEK_API_BASE="https://api.deepseek.com"
 **Symptoms:** Console shows timeout errors, falls back to standard expansion
 
 **Solutions:**
-- Check your internet connection
+- Checconfig.txt` has valid `deepseek_api_key` entry
 - Verify API key is correct
 - Check if DeepSeek API is accessible from your location
 - Try increasing timeout in `extras/llm_expansion.py` (currently 30 seconds)
@@ -192,11 +201,11 @@ data = {
     'temperature': 0.7,         # Adjust creativity (0.0-1.0)
     'max_tokens': 200           # Maximum expansion length
 }
-```
+```Deprecated (now using config.txt)
+   - `EXTERNAL_LLM_EXPANSION.md` - This documentation
 
-## Technical Details
-
-### Files Modified/Created
+2. **Modified:**
+   - `modules/config.py` - Added API key configuration options
 
 1. **Created:**
    - `extras/llm_expansion.py` - DeepSeek API integration

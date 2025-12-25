@@ -12,24 +12,18 @@ pip install requests==2.31.0
 python launch.py
 ```
 
-### 2. Create .env File
+### 2. Add API Key to config.txt
 
-Create a file named `.env` in the Fooocus root directory:
+Edit your `config.txt` file (it will be created after first launch if it doesn't exist):
 
-```bash
-# Copy the example
-cp .env.example .env
-
-# Edit the file
-nano .env  # or use your favorite text editor
+```json
+{
+  "deepseek_api_key": "sk-your-actual-api-key-here",
+  "deepseek_api_base": "https://api.deepseek.com"
+}
 ```
 
-Add your DeepSeek API key:
-
-```env
-DEEPSEEK_API_KEY=sk-your-actual-api-key-here
-DEEPSEEK_API_BASE=https://api.deepseek.com
-```
+**Note:** The `deepseek_api_base` is optional and defaults to `https://api.deepseek.com`
 
 ### 3. Get DeepSeek API Key
 
@@ -37,7 +31,7 @@ DEEPSEEK_API_BASE=https://api.deepseek.com
 2. Sign up or log in
 3. Go to API Keys section
 4. Create a new API key
-5. Copy the key to your `.env` file
+5. Copy the key to your `config.txt` file
 
 ### 4. Launch Fooocus
 
@@ -70,9 +64,9 @@ Try these prompts to see the difference:
 ## Troubleshooting
 
 **No API key warning?**
-- Make sure `.env` file is in the root directory (same folder as launch.py)
-- Check that the file is named exactly `.env` (not `.env.txt`)
-- Verify the API key format: `DEEPSEEK_API_KEY=sk-...`
+- Make sure `config.txt` has the `deepseek_api_key` field
+- Check that the API key format is correct: `"deepseek_api_key": "sk-..."`
+- Verify the JSON syntax in config.txt is valid (no missing commas or quotes)
 
 **Import error for requests?**
 ```bash
