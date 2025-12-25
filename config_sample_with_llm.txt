@@ -42,5 +42,7 @@
     
     "default_use_external_llm_expansion": false,
     "deepseek_api_key": "sk-your-deepseek-api-key-here",
-    "deepseek_api_base": "https://api.deepseek.com"
+    "deepseek_api_base": "https://api.deepseek.com",
+    
+    "civitai_api_key": ""
 }

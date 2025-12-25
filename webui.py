@@ -698,6 +698,166 @@ with shared.gradio_root:
                 gr.HTML('<a href="https://github.com/lllyasviel/Fooocus/discussions/117" target="_blank">\U0001F4D4 Documentation</a>')
                 dev_mode = gr.Checkbox(label='Developer Debug Mode', value=modules.config.default_developer_debug_mode_checkbox, container=False)
 
+            with gr.Tab(label='CivitAI Models'):
+                gr.Markdown('### Download Models from CivitAI')
+                gr.Markdown('Enter model ID or version ID from CivitAI URL. Example: `https://civitai.com/models/123456` → use `123456`')
+                
+                with gr.Row():
+                    with gr.Column(scale=3):
+                        civitai_model_id = gr.Textbox(label='Model ID or Version ID', placeholder='Enter CivitAI model ID', lines=1)
+                    with gr.Column(scale=1):
+                        download_civitai_model_button = gr.Button('Download Model', variant='primary')
+                
+                civitai_download_progress = gr.Textbox(label='Download Status', lines=2, interactive=False)
+                civitai_download_progress_bar = gr.HTML(value='', visible=False)
+                
+                gr.Markdown('---')
+                gr.Markdown('### CivitAI API Key Configuration')
+                
+                with gr.Row():
+                    civitai_api_key_input = gr.Textbox(
+                        label='CivitAI API Key',
+                        placeholder='Enter your CivitAI API key (optional for public models)',
+                        type='password',
+                        value=modules.config.civitai_api_key if modules.config.civitai_api_key else '',
+                        lines=1
+                    )
+                    save_civitai_key_button = gr.Button('Save API Key', variant='secondary')
+                
+                civitai_key_status = gr.Textbox(label='Status', lines=1, interactive=False)
+                
+                gr.Markdown('Get your API key from [CivitAI Settings](https://civitai.com/user/account)')
+                
+                gr.Markdown('---')
+                gr.Markdown('### Downloaded Models')
+                
+                with gr.Row():
+                    civitai_filter_type = gr.Dropdown(
+                        label='Filter by Type',
+                        choices=['all', 'checkpoints', 'loras', 'embeddings', 'vae', 'controlnet', 'upscale_models'],
+                        value='all'
+                    )
+                    refresh_civitai_list_button = gr.Button('🔄 Refresh List', variant='secondary')
+                
+                civitai_files_list = gr.Dataframe(
+                    headers=['Category', 'Filename', 'Size'],
+                    datatype=['str', 'str', 'str'],
+                    col_count=(3, 'fixed'),
+                    interactive=False,
+                    wrap=True,
+                    max_rows=20
+                )
+                
+                with gr.Row():
+                    delete_civitai_model_button = gr.Button('Delete Selected', variant='stop', visible=False)
+                    civitai_delete_status = gr.Textbox(label='Delete Status', lines=1, interactive=False, visible=False)
+                
+                def save_civitai_api_key(api_key):
+                    """Save CivitAI API key to config"""
+                    try:
+                        import json
+                        config_path = modules.config.config_path
+                        
+                        # Read existing config
+                        config_data = {}
+                        if os.path.exists(config_path):
+                            with open(config_path, 'r', encoding='utf-8') as f:
+                                config_data = json.load(f)
+                        
+                        # Update API key
+                        config_data['civitai_api_key'] = api_key.strip()
+                        
+                        # Save config
+                        with open(config_path, 'w', encoding='utf-8') as f:
+                            json.dump(config_data, f, indent=4)
+                        
+                        # Update runtime config
+                        modules.config.civitai_api_key = api_key.strip()
+                        
+                        # Reinitialize manager with new key
+                        from modules.civitai_manager import CivitAIManager
+                        global _civitai_manager
+                        _civitai_manager = CivitAIManager(api_key=api_key.strip())
+                        
+                        return 'API key saved successfully! Please restart Fooocus for full effect.'
+                    except Exception as e:
+                        return f'Error saving API key: {str(e)}'
+                
+                def download_civitai_model_func(model_id):
+                    """Download model from CivitAI"""
+                    if not model_id or model_id.strip() == '':
+                        return 'Please enter a model ID', ''
+                    
+                    try:
+                        from modules.civitai_manager import get_civitai_manager
+                        manager = get_civitai_manager()
+                        
+                        status_messages = []
+                        
+                        def progress_callback(progress, message):
+                            status_messages.append(message)
+                        
+                        success, message = manager.download_model(model_id.strip(), progress_callback=progress_callback)
+                        
+                        if success:
+                            return f'✓ {message}', ''
+                        else:
+                            return f'✗ {message}', ''
+                    except Exception as e:
+                        return f'Error: {str(e)}', ''
+                
+                def list_civitai_models(filter_type):
+                    """List downloaded models"""
+                    try:
+                        from modules.civitai_manager import get_civitai_manager
+                        manager = get_civitai_manager()
+                        
+                        files = manager.list_downloaded_files(filter_type)
+                        
+                        if not files:
+                            return [['No files found', '-', '-']]
+                        
+                        return [[f['category'], f['name'], f['size']] for f in files]
+                    except Exception as e:
+                        return [[f'Error: {str(e)}', '-', '-']]
+                
+                # Wire up callbacks
+                save_civitai_key_button.click(
+                    save_civitai_api_key,
+                    inputs=[civitai_api_key_input],
+                    outputs=[civitai_key_status],
+                    show_progress=False
+                )
+                
+                download_civitai_model_button.click(
+                    download_civitai_model_func,
+                    inputs=[civitai_model_id],
+                    outputs=[civitai_download_progress, civitai_download_progress_bar],
+                    show_progress=True
+                )
+                
+                refresh_civitai_list_button.click(
+                    list_civitai_models,
+                    inputs=[civitai_filter_type],
+                    outputs=[civitai_files_list],
+                    show_progress=False
+                )
+                
+                civitai_filter_type.change(
+                    list_civitai_models,
+                    inputs=[civitai_filter_type],
+                    outputs=[civitai_files_list],
+                    show_progress=False
+                )
+                
+                # Initial load
+                shared.gradio_root.load(
+                    lambda: list_civitai_models('all'),
+                    outputs=[civitai_files_list],
+                    show_progress=False
+                )
+
+
                 with gr.Column(visible=modules.config.default_developer_debug_mode_checkbox) as dev_tools:
                     with gr.Tab(label='Debug Tools'):
                         adm_scaler_positive = gr.Slider(label='Positive ADM Guidance Scaler', minimum=0.1, maximum=3.0,

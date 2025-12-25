@@ -720,6 +720,15 @@ deepseek_api_base = get_config_item_or_set_default(
     expected_type=str
 )
 
+# CivitAI Configuration
+civitai_api_key = get_config_item_or_set_default(
+    key='civitai_api_key',
+    default_value='',
+    validator=lambda x: isinstance(x, str),
+    disable_empty_as_none=True,
+    expected_type=str
+)
+
 default_inpaint_mask_sam_model = get_config_item_or_set_default(
     key='default_inpaint_mask_sam_model',
     default_value='vit_b',
