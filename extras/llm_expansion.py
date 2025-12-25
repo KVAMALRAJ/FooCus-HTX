@@ -27,20 +27,43 @@ class ExternalLLMExpansion:
             api_key: DeepSeek API key. If None, will try to load from config
             api_base: DeepSeek API base URL. Defaults to https://api.deepseek.com
         """
+        # Store parameters but don't load config yet
+        self._initial_api_key = api_key
+        self._initial_api_base = api_base
+        self.api_key = None
+        self.api_base = None
+        
+    def _ensure_initialized(self):
+        """Lazy initialization - load config when first needed"""
+        if self.api_key is not None:
+            return  # Already initialized
+            
         # Get API credentials from parameters or config
         import modules.config
         
-        self.api_key = api_key or modules.config.deepseek_api_key
-        self.api_base = api_base or modules.config.deepseek_api_base
+        self.api_key = self._initial_api_key or modules.config.deepseek_api_key
+        self.api_base = self._initial_api_base or modules.config.deepseek_api_base
+        
+        # Clean up API key - remove quotes and whitespace
+        if self.api_key:
+            self.api_key = str(self.api_key).strip().strip('"').strip("'")
+        
+        if self.api_base:
+            self.api_base = str(self.api_base).strip().strip('"').strip("'")
         
         if not self.api_key or self.api_key == '':
             print('[External LLM Expansion] Warning: deepseek_api_key not found in config.txt. External expansion will not work.')
             print('[External LLM Expansion] Please add "deepseek_api_key": "your_key_here" to config.txt')
         else:
-            print('[External LLM Expansion] DeepSeek API initialized successfully.')
+            # Show first 8 and last 4 characters for verification
+            masked_key = self.api_key[:8] + '...' + self.api_key[-4:] if len(self.api_key) > 12 else '****'
+            print(f'[External LLM Expansion] DeepSeek API initialized successfully.')
+            print(f'[External LLM Expansion] Using API key: {masked_key}')
+            print(f'[External LLM Expansion] API base URL: {self.api_base}')
     
     def is_available(self) -> bool:
         """Check if the external LLM expansion is available"""
+        self._ensure_initialized()
         return bool(self.api_key)
     
     def expand_prompt(self, prompt: str, seed: int = 0) -> str:
@@ -54,6 +77,8 @@ class ExternalLLMExpansion:
         Returns:
             Expanded prompt string
         """
+        self._ensure_initialized()
+        
         if not self.is_available():
             print('[External LLM Expansion] API key not available, returning original prompt')
             return prompt
@@ -109,6 +134,8 @@ Output: "a highly detailed cat, professional photography, natural lighting, deta
                 expanded = result['choices'][0]['message']['content'].strip()
                 expanded = safe_str(expanded)
                 
+                print(f'[External LLM Expansion] API key being used: {self.api_key[:8]}...{self.api_key[-4:] if len(self.api_key) > 12 else "****"}')
+                print(f'[External LLM Expansion] Please verify your API key in config.txt')
                 # Remove any quotes that might wrap the response
                 if expanded.startswith('"') and expanded.endswith('"'):
                     expanded = expanded[1:-1]
