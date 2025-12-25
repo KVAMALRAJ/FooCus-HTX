@@ -160,6 +160,9 @@ class AsyncTask:
         
         # External LLM expansion checkbox
         self.use_external_llm_expansion = args.pop()
+        
+        # Store expanded prompts for display
+        self.expanded_prompts = []
 
 async_tasks = []
 
@@ -744,6 +747,8 @@ def worker():
                     if pipeline.final_external_expansion.is_available():
                         print(f'[Prompt Expansion] Using external LLM expansion')
                         expansion = pipeline.final_external_expansion(t['task_prompt'], t['task_seed'])
+                        # Store the expanded prompt for display
+                        async_task.expanded_prompts.append(expansion)
                     else:
                         print(f'[Prompt Expansion] External LLM not available, falling back to Fooocus expansion')
                         expansion = pipeline.final_expansion(t['task_prompt'], t['task_seed'])

@@ -32,6 +32,10 @@ class ExternalLLMExpansion:
         self._initial_api_base = api_base
         self.api_key = None
         self.api_base = None
+        self.system_prompt = None
+        self.last_expanded_prompt = None  # Store the last expanded prompt
+        self.system_prompt = None
+        self.last_expanded_prompt = None  # Store the last expanded prompt
         
     def _ensure_initialized(self):
         """Lazy initialization - load config when first needed"""
@@ -43,6 +47,8 @@ class ExternalLLMExpansion:
         
         self.api_key = self._initial_api_key or modules.config.deepseek_api_key
         self.api_base = self._initial_api_base or modules.config.deepseek_api_base
+        self.system_prompt = modules.config.deepseek_system_prompt
+        self.system_prompt = modules.config.deepseek_system_prompt
         
         # Clean up API key - remove quotes and whitespace
         if self.api_key:
@@ -71,6 +77,26 @@ class ExternalLLMExpansion:
         self._ensure_initialized()
         return bool(self.api_key)
     
+    def set_system_prompt(self, prompt: str):
+        """
+        Set a custom system prompt
+        
+        Args:
+            prompt: The new system prompt to use
+        """
+        self._ensure_initialized()
+        self.system_prompt = prompt
+        print(f'[External LLM Expansion] System prompt updated')
+    
+    def get_system_prompt(self) -> str:
+        """Get the current system prompt"""
+        self._ensure_initialized()
+        return self.system_prompt
+    
+    def get_last_expanded_prompt(self) -> Optional[str]:
+        """Get the last expanded prompt that was generated"""
+        return self.last_expanded_prompt
+    
     def expand_prompt(self, prompt: str, seed: int = 0) -> str:
         """
         Expand a prompt using DeepSeek API
@@ -92,23 +118,8 @@ class ExternalLLMExpansion:
             return ''
         
         try:
-            # Prepare the system message
-            system_message = """You are an expert at expanding stable diffusion prompts. 
-Your task is to take a short image generation prompt and expand it into a detailed, high-quality prompt that will generate better images.
-
-Guidelines:
-- Add artistic and technical details (lighting, composition, style, mood)
-- Include quality enhancers (highly detailed, masterpiece, best quality, 8k, etc.)
-- Maintain the core concept of the original prompt
-- Keep it concise but descriptive (aim for 50-100 words)
-- Use comma-separated descriptive phrases
-- Do NOT add any explanations or commentary, ONLY return the expanded prompt
-- Focus on visual details that improve image quality
-
-Example:
-Input: "a cat"
-Output: "a highly detailed cat, professional photography, natural lighting, detailed fur texture, sharp focus, high resolution, photorealistic, masterpiece quality, sitting pose, warm colors, soft bokeh background"
-"""
+            # Use system prompt from config
+            system_message = self.system_prompt
             
             # Prepare the API request
             headers = {
@@ -149,6 +160,9 @@ Output: "a highly detailed cat, professional photography, natural lighting, deta
                 
                 print(f'[External LLM Expansion] Original: {prompt}')
                 print(f'[External LLM Expansion] Expanded: {expanded}')
+                
+                # Store the expanded prompt for display
+                self.last_expanded_prompt = expanded
                 return expanded
             else:
                 print(f'[External LLM Expansion] API error {response.status_code}: {response.text}')

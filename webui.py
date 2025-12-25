@@ -35,7 +35,7 @@ def generate_clicked(task: worker.AsyncTask):
 
     with model_management.interrupt_processing_mutex:
         model_management.interrupt_processing = False
-    # outputs=[progress_html, progress_window, progress_gallery, gallery]
+    # outputs=[progress_html, progress_window, progress_gallery, gallery, expanded_prompt_accordion, expanded_prompt_display]
 
     if len(task.args) == 0:
         return
@@ -46,7 +46,9 @@ def generate_clicked(task: worker.AsyncTask):
     yield gr.update(visible=True, value=modules.html.make_progress_html(1, 'Waiting for task to start ...')), \
         gr.update(visible=True, value=None), \
         gr.update(visible=False, value=None), \
-        gr.update(visible=False)
+        gr.update(visible=False), \
+        gr.update(), \
+        gr.update()
 
     worker.async_tasks.append(task)
 
@@ -66,20 +68,33 @@ def generate_clicked(task: worker.AsyncTask):
                 yield gr.update(visible=True, value=modules.html.make_progress_html(percentage, title)), \
                     gr.update(visible=True, value=image) if image is not None else gr.update(), \
                     gr.update(), \
-                    gr.update(visible=False)
+                    gr.update(visible=False), \
+                    gr.update(), \
+                    gr.update()
             if flag == 'results':
                 yield gr.update(visible=True), \
                     gr.update(visible=True), \
                     gr.update(visible=True, value=product), \
-                    gr.update(visible=False)
+                    gr.update(visible=False), \
+                    gr.update(), \
+                    gr.update()
             if flag == 'finish':
                 if not args_manager.args.disable_enhance_output_sorting:
                     product = sort_enhance_images(product, task)
+                
+                # Get expanded prompts if available
+                expanded_text = ''
+                accordion_visible = False
+                if len(task.expanded_prompts) > 0:
+                    expanded_text = '\n\n'.join([f'Prompt {i+1}:\n{p}' for i, p in enumerate(task.expanded_prompts)])
+                    accordion_visible = True
 
                 yield gr.update(visible=False), \
                     gr.update(visible=False), \
                     gr.update(visible=False), \
-                    gr.update(visible=True, value=product)
+                    gr.update(visible=True, value=product), \
+                    gr.update(visible=accordion_visible), \
+                    gr.update(value=expanded_text)
                 finished = True
 
                 # delete Fooocus temp images, only keep gradio temp images
@@ -175,6 +190,15 @@ with shared.gradio_root:
                     default_prompt = modules.config.default_prompt
                     if isinstance(default_prompt, str) and default_prompt != '':
                         shared.gradio_root.load(lambda: default_prompt, outputs=prompt)
+                    
+                    # Display for expanded prompt from LLM
+                    with gr.Accordion(label='📝 Extended Prompt (from DeepSeek LLM)', open=False, visible=False) as expanded_prompt_accordion:
+                        expanded_prompt_display = gr.Textbox(
+                            label='This is the expanded prompt that was actually used for generation',
+                            interactive=False,
+                            lines=5,
+                            show_label=True
+                        )
 
                 with gr.Column(scale=3, min_width=0):
                     generate_button = gr.Button(label="Generate", value="Generate", elem_classes='type_row', elem_id='generate_button', visible=True)
@@ -694,9 +718,85 @@ with shared.gradio_root:
                                       info='Higher value means image and texture are sharper.')
                 use_external_llm_expansion = gr.Checkbox(label='Use External LLM for Prompt Expansion', 
                                                         value=modules.config.default_use_external_llm_expansion,
-                                                        info='Use DeepSeek API for more advanced prompt expansion. Requires DEEPSEEK_API_KEY in .env file.')
+                                                        info='Use DeepSeek API for more advanced prompt expansion. Requires DEEPSEEK_API_KEY in config.txt file.')
+                
+                with gr.Accordion(label='DeepSeek System Prompt', open=False):
+                    deepseek_system_prompt_input = gr.Textbox(
+                        label='System Prompt for DeepSeek API',
+                        value=modules.config.deepseek_system_prompt,
+                        lines=10,
+                        placeholder='Enter the system prompt that instructs DeepSeek how to expand prompts...',
+                        info='This prompt defines how DeepSeek will expand your image generation prompts.'
+                    )
+                    with gr.Row():
+                        save_system_prompt_button = gr.Button('Save System Prompt', variant='secondary')
+                        reset_system_prompt_button = gr.Button('Reset to Default', variant='secondary')
+                    system_prompt_status = gr.Textbox(label='Status', lines=1, interactive=False, visible=False)
+                
                 gr.HTML('<a href="https://github.com/lllyasviel/Fooocus/discussions/117" target="_blank">\U0001F4D4 Documentation</a>')
                 dev_mode = gr.Checkbox(label='Developer Debug Mode', value=modules.config.default_developer_debug_mode_checkbox, container=False)
+                
+                # System prompt callbacks
+                def save_deepseek_system_prompt(prompt_text):
+                    """Save DeepSeek system prompt to config"""
+                    try:
+                        import json
+                        config_path = modules.config.config_path
+                        
+                        # Load current config
+                        with open(config_path, 'r', encoding='utf-8') as f:
+                            config_data = json.load(f)
+                        
+                        # Update system prompt
+                        config_data['deepseek_system_prompt'] = prompt_text
+                        
+                        # Save config
+                        with open(config_path, 'w', encoding='utf-8') as f:
+                            json.dump(config_data, f, indent=4)
+                        
+                        # Update runtime config
+                        modules.config.deepseek_system_prompt = prompt_text
+                        
+                        # Update the expansion instance
+                        import modules.default_pipeline as pipeline
+                        if pipeline.final_external_expansion is not None:
+                            pipeline.final_external_expansion.set_system_prompt(prompt_text)
+                        
+                        return gr.update(value='✓ System prompt saved successfully!', visible=True)
+                    except Exception as e:
+                        return gr.update(value=f'✗ Error: {str(e)}', visible=True)
+                
+                def reset_deepseek_system_prompt():
+                    """Reset system prompt to default"""
+                    default_prompt = '''You are an expert at expanding stable diffusion prompts. 
+Your task is to take a short image generation prompt and expand it into a detailed, high-quality prompt that will generate better images.
+
+Guidelines:
+- Add artistic and technical details (lighting, composition, style, mood)
+- Include quality enhancers (highly detailed, masterpiece, best quality, 8k, etc.)
+- Maintain the core concept of the original prompt
+- Keep it concise but descriptive (aim for 50-100 words)
+- Use comma-separated descriptive phrases
+- Do NOT add any explanations or commentary, ONLY return the expanded prompt
+- Focus on visual details that improve image quality
+
+Example:
+Input: "a cat"
+Output: "a highly detailed cat, professional photography, natural lighting, detailed fur texture, sharp focus, high resolution, photorealistic, masterpiece quality, sitting pose, warm colors, soft bokeh background"'''
+                    return default_prompt, gr.update(value='Reset to default', visible=True)
+                
+                save_system_prompt_button.click(
+                    save_deepseek_system_prompt,
+                    inputs=[deepseek_system_prompt_input],
+                    outputs=[system_prompt_status],
+                    show_progress=False
+                )
+                
+                reset_system_prompt_button.click(
+                    reset_deepseek_system_prompt,
+                    outputs=[deepseek_system_prompt_input, system_prompt_status],
+                    show_progress=False
+                )
 
             with gr.Tab(label='CivitAI Models'):
                 gr.Markdown('### Download Models from CivitAI')
@@ -1223,7 +1323,7 @@ with shared.gradio_root:
                               outputs=[stop_button, skip_button, generate_button, gallery, state_is_generating]) \
             .then(fn=refresh_seed, inputs=[seed_random, image_seed], outputs=image_seed) \
             .then(fn=get_task, inputs=ctrls, outputs=currentTask) \
-            .then(fn=generate_clicked, inputs=currentTask, outputs=[progress_html, progress_window, progress_gallery, gallery]) \
+            .then(fn=generate_clicked, inputs=currentTask, outputs=[progress_html, progress_window, progress_gallery, gallery, expanded_prompt_accordion, expanded_prompt_display]) \
             .then(lambda: (gr.update(visible=True, interactive=True), gr.update(visible=False, interactive=False), gr.update(visible=False, interactive=False), False),
                   outputs=[generate_button, stop_button, skip_button, state_is_generating]) \
             .then(fn=update_history_link, outputs=history_link) \
