@@ -59,7 +59,12 @@ class ExternalLLMExpansion:
             masked_key = self.api_key[:8] + '...' + self.api_key[-4:] if len(self.api_key) > 12 else '****'
             print(f'[External LLM Expansion] DeepSeek API initialized successfully.')
             print(f'[External LLM Expansion] Using API key: {masked_key}')
+            print(f'[External LLM Expansion] API key length: {len(self.api_key)} characters')
             print(f'[External LLM Expansion] API base URL: {self.api_base}')
+            
+            # Temporary debug - print full key for troubleshooting
+            # Remove this after fixing the issue
+            print(f'[External LLM Expansion] DEBUG - Full API key: {self.api_key}')
     
     def is_available(self) -> bool:
         """Check if the external LLM expansion is available"""
@@ -147,6 +152,8 @@ Output: "a highly detailed cat, professional photography, natural lighting, deta
                 return expanded
             else:
                 print(f'[External LLM Expansion] API error {response.status_code}: {response.text}')
+                print(f'[External LLM Expansion] DEBUG - Full API key being sent: {self.api_key}')
+                print(f'[External LLM Expansion] DEBUG - API key length: {len(self.api_key)}')
                 return prompt
                 
         except requests.exceptions.Timeout:
