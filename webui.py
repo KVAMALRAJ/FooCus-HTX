@@ -700,13 +700,23 @@ with shared.gradio_root:
 
             with gr.Tab(label='CivitAI Models'):
                 gr.Markdown('### Download Models from CivitAI')
-                gr.Markdown('Enter model ID or version ID from CivitAI URL. Example: `https://civitai.com/models/123456` → use `123456`')
+                gr.Markdown('''
+                **How to download:**
+                1. Visit a model page on CivitAI (e.g., `https://civitai.com/models/123456`)
+                2. Click on the version you want to download
+                3. Copy the **Version ID** from the URL or page
+                4. Paste the Version ID below and optionally enter a custom filename
+                
+                **Example:** For version URL ending with `?modelVersionId=2391289`, use `2391289` as Version ID
+                ''')
                 
                 with gr.Row():
-                    with gr.Column(scale=3):
-                        civitai_model_id = gr.Textbox(label='Model ID or Version ID', placeholder='Enter CivitAI model ID', lines=1)
+                    with gr.Column(scale=2):
+                        civitai_model_id = gr.Textbox(label='Version ID (from CivitAI)', placeholder='e.g., 2391289', lines=1)
+                    with gr.Column(scale=2):
+                        civitai_filename = gr.Textbox(label='Filename (optional)', placeholder='e.g., CyberRealystic.safetensors', lines=1)
                     with gr.Column(scale=1):
-                        download_civitai_model_button = gr.Button('Download Model', variant='primary')
+                        download_civitai_model_button = gr.Button('Download', variant='primary')
                 
                 civitai_download_progress = gr.Textbox(label='Download Status', lines=2, interactive=False)
                 civitai_download_progress_bar = gr.HTML(value='', visible=False)
@@ -783,10 +793,10 @@ with shared.gradio_root:
                     except Exception as e:
                         return f'Error saving API key: {str(e)}'
                 
-                def download_civitai_model_func(model_id):
+                def download_civitai_model_func(version_id, filename):
                     """Download model from CivitAI"""
-                    if not model_id or model_id.strip() == '':
-                        return 'Please enter a model ID', ''
+                    if not version_id or version_id.strip() == '':
+                        return 'Please enter a version ID', ''
                     
                     try:
                         from modules.civitai_manager import get_civitai_manager
@@ -797,7 +807,14 @@ with shared.gradio_root:
                         def progress_callback(progress, message):
                             status_messages.append(message)
                         
-                        success, message = manager.download_model(model_id.strip(), progress_callback=progress_callback)
+                        # Use custom filename if provided, otherwise None to use default
+                        custom_name = filename.strip() if filename and filename.strip() else None
+                        
+                        success, message = manager.download_model(
+                            version_id.strip(), 
+                            custom_filename=custom_name,
+                            progress_callback=progress_callback
+                        )
                         
                         if success:
                             return f'✓ {message}', ''
@@ -831,7 +848,7 @@ with shared.gradio_root:
                 
                 download_civitai_model_button.click(
                     download_civitai_model_func,
-                    inputs=[civitai_model_id],
+                    inputs=[civitai_model_id, civitai_filename],
                     outputs=[civitai_download_progress, civitai_download_progress_bar],
                     show_progress=True
                 )

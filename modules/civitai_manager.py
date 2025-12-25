@@ -7,7 +7,6 @@ import requests
 from typing import Optional, Dict, List, Tuple
 from pathlib import Path
 import modules.config
-from tqdm import tqdm
 
 
 class CivitAIManager:
@@ -125,46 +124,53 @@ class CivitAIManager:
         
         return folder_mapping.get(model_type, modules.config.paths_checkpoints[0])
     
-    def download_model(self, model_id: str, version_id: Optional[str] = None, 
+    def download_model(self, model_id_or_version: str, custom_filename: Optional[str] = None,
                        progress_callback=None) -> Tuple[bool, str]:
         """
-        Download a model from CivitAI
+        Download a model from CivitAI using version ID (preferred) or model ID
         
         Args:
-            model_id: CivitAI model ID
-            version_id: Specific version ID (optional, uses latest if not provided)
+            model_id_or_version: CivitAI version ID (e.g., 2391289) or model ID
+            custom_filename: Optional custom filename (e.g., "CyberRealystic.safetensors")
             progress_callback: Callback function for progress updates
             
         Returns:
             Tuple of (success, message)
         """
         try:
-            # Get model info
             if progress_callback:
                 progress_callback(0, "Fetching model information...")
             
-            model_info = self.get_model_info(model_id)
-            if not model_info:
-                return False, "Failed to fetch model information"
+            # Try to get version info first (assume it's a version ID)
+            version_info = self.get_model_version_info(model_id_or_version)
             
-            model_name = model_info.get('name', 'Unknown')
-            model_type = self.determine_model_type(model_info)
-            
-            # Get version info
-            if version_id:
-                version_info = self.get_model_version_info(version_id)
-                if not version_info:
-                    return False, "Failed to fetch version information"
-            else:
-                # Use latest version
+            # If that fails, try as model ID
+            if not version_info:
+                model_info = self.get_model_info(model_id_or_version)
+                if not model_info:
+                    return False, f"Failed to fetch model information for ID: {model_id_or_version}"
+                
+                # Get latest version from model
                 versions = model_info.get('modelVersions', [])
                 if not versions:
                     return False, "No versions available for this model"
                 version_info = versions[0]
+                model_type_info = model_info
+            else:
+                # Get parent model info for type detection
+                model_id = version_info.get('modelId')
+                if model_id:
+                    model_type_info = self.get_model_info(str(model_id))
+                    if not model_type_info:
+                        model_type_info = version_info  # Fallback to version info
+                else:
+                    model_type_info = version_info
             
-            version_name = version_info.get('name', 'Unknown')
+            # Determine model type
+            model_type = self.determine_model_type(model_type_info)
+            version_id = version_info.get('id')
             
-            # Get download file
+            # Get filename
             files = version_info.get('files', [])
             if not files:
                 return False, "No files available for download"
@@ -178,17 +184,17 @@ class CivitAIManager:
             if not download_file:
                 download_file = files[0]
             
-            download_url = download_file.get('downloadUrl')
-            if not download_url:
-                return False, "Download URL not found"
+            # Use custom filename if provided, otherwise use original filename
+            if custom_filename:
+                file_name = custom_filename
+            else:
+                file_name = download_file.get('name', f"model_{version_id}.safetensors")
             
-            file_name = download_file.get('name', f"{model_name}_{version_name}.safetensors")
-            file_size = download_file.get('sizeKB', 0) * 1024
-            
-            # Add API key to download URL if available
+            # Construct direct download URL using version ID
+            # Format: https://civitai.com/api/download/models/{versionId}?token={api_key}
+            download_url = f"https://civitai.com/api/download/models/{version_id}"
             if self.api_key:
-                separator = '&' if '?' in download_url else '?'
-                download_url = f"{download_url}{separator}token={self.api_key}"
+                download_url = f"{download_url}?token={self.api_key}"
             
             # Determine target folder
             target_folder = self.get_target_folder(model_type)
@@ -203,10 +209,16 @@ class CivitAIManager:
             if progress_callback:
                 progress_callback(5, f"Downloading {file_name}...")
             
+            print(f"[CivitAI] Downloading from: {download_url}")
             response = requests.get(download_url, stream=True, timeout=300)
             response.raise_for_status()
             
-            total_size = int(response.headers.get('content-length', file_size))
+            # Get file size from response or metadata
+            total_size = int(response.headers.get('content-length', 0))
+            if total_size == 0:
+                file_size_kb = download_file.get('sizeKB', 0)
+                total_size = file_size_kb * 1024
+            
             downloaded = 0
             
             with open(target_path, 'wb') as f:
@@ -222,6 +234,7 @@ class CivitAIManager:
             if progress_callback:
                 progress_callback(100, f"Download complete: {file_name}")
             
+            print(f"[CivitAI] Successfully downloaded to: {target_path}")
             return True, f"Successfully downloaded {file_name} to {model_type} folder"
             
         except requests.exceptions.Timeout:

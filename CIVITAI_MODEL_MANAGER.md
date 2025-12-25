@@ -21,12 +21,16 @@ Download models, checkpoints, LoRAs, and more directly from CivitAI into Fooocus
 ### 2. Download a Model
 
 1. Go to [CivitAI](https://civitai.com/) and find a model you want
-2. Copy the model ID from the URL:
-   - Example: `https://civitai.com/models/123456` → use `123456`
-   - Or from version: `https://civitai.com/models/123456?modelVersionId=789012` → use `789012`
-3. Paste the ID into the "Model ID or Version ID" field
-4. Click **Download Model**
-5. Wait for the download to complete (progress shown in status box)
+2. Click on the specific **version** you want to download
+3. Copy the **Version ID**:
+   - From URL: `https://civitai.com/models/123456?modelVersionId=2391289` → use `2391289`
+   - Or look for the version ID on the version's page
+4. Paste the **Version ID** into the "Version ID (from CivitAI)" field
+5. (Optional) Enter a custom filename like `CyberRealystic.safetensors`
+6. Click **Download**
+7. Wait for the download to complete (progress shown in status box)
+
+**Important:** Use the **Version ID**, not the model ID. Each model can have multiple versions.
 
 ### 3. Use Your Downloaded Model
 
@@ -113,26 +117,34 @@ Click the **🔄 Refresh List** button to update the list of downloaded files.
 ### Example 1: Downloading a Checkpoint
 
 1. Visit https://civitai.com/models/133005/juggernaut-xl
-2. Copy the model ID: `133005`
-3. Paste into Fooocus CivitAI Models tab
-4. Click Download
-5. Model appears in `models/checkpoints/`
-6. Select it from the Model dropdown in Style tab
+2. Click on a specific version (e.g., "V9")
+3. Copy the version ID: Let's say it's `2391289`
+4. Paste `2391289` into the Version ID field
+5. Enter filename: `CyberRealystic.safetensors`
+6. Click Download
+7. Model appears in `models/checkpoints/`
+8. Select it from the Model dropdown in Style tab
 
 ### Example 2: Downloading a LoRA
 
 1. Visit https://civitai.com/models/124347/detail-tweaker-xl
-2. Copy the model ID: `124347`
-3. Paste and download
-4. Model appears in `models/loras/`
-5. Enable it in the LoRA tab
+2. Click on the version you want
+3. Copy the version ID from the URL (e.g., `2267500`)
+4. Paste `2267500` and optionally enter `Indian_Clothing.safetensors`
+5. Download
+6. Model appears in `models/loras/`
+7. Enable it in the LoRA tab
 
-### Example 3: Downloading Specific Version
+### Example 3: Using wget Command Format
 
-If you want a specific version (not the latest):
-1. Click on the version on CivitAI
-2. Copy the version ID from URL: `?modelVersionId=789012` → use `789012`
-3. Download using the version ID
+If you have a wget command like:
+```bash
+wget -c 'https://civitai.com/api/download/models/2391289?token=YOUR_TOKEN' -O CyberRealystic.safetensors
+```
+
+Just use:
+- **Version ID**: `2391289`
+- **Filename**: `CyberRealystic.safetensors`
 
 ## Troubleshooting
 
