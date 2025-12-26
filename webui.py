@@ -1205,9 +1205,9 @@ Output: "a highly detailed cat, professional photography, natural lighting, deta
                 result = []
                 for inpaint_mode in args:
                     if inpaint_mode != modules.flags.inpaint_option_detail:
-                    result.append(gr.update(value=inpaint_engine_version))
+                        result.append(gr.update(value=inpaint_engine_version))
                     else:
-                    result.append(gr.update())
+                        result.append(gr.update())
 
                 return result
 
