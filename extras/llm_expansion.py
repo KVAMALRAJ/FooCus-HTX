@@ -39,9 +39,7 @@ class ExternalLLMExpansion:
         
     def _ensure_initialized(self):
         """Lazy initialization - load config when first needed"""
-        if self.api_key is not None:
-            return  # Already initialized
-            
+        # Always reload config to get fresh values
         # Get API credentials from parameters or config
         import modules.config
         
