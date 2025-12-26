@@ -1153,9 +1153,9 @@ Output: "a highly detailed cat, professional photography, natural lighting, deta
                     results += [gr.update(choices=['None'] + modules.config.model_filenames)]
                     results += [gr.update(choices=[flags.default_vae] + modules.config.vae_filenames)]
                     if not args_manager.args.disable_preset_selection:
-                    results += [gr.update(choices=modules.config.available_presets)]
+                        results += [gr.update(choices=modules.config.available_presets)]
                     for i in range(modules.config.default_max_lora_number):
-                    results += [gr.update(interactive=True),
+                        results += [gr.update(interactive=True),
                                     gr.update(choices=['None'] + modules.config.lora_filenames), gr.update()]
                     return results
 
