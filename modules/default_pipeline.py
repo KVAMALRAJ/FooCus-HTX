@@ -9,18 +9,12 @@ import ldm_patched.modules.latent_formats
 import modules.inpaint_worker
 import extras.vae_interpose as vae_interpose
 from extras.expansion import FooocusExpansion
-from extras.llm_expansion import ExternalLLMExpansion
-
-from ldm_patched.modules.model_base import SDXL, SDXLRefiner
-from modules.sample_hijack import clip_separate
-from modules.util import get_file_from_folder_list, get_enabled_loras
 
 
 model_base = core.StableDiffusionModel()
 model_refiner = core.StableDiffusionModel()
 
 final_expansion = None
-final_external_expansion = None
 final_unet = None
 final_clip = None
 final_vae = None
@@ -235,7 +229,7 @@ def prepare_text_encoder(async_call=True):
 @torch.inference_mode()
 def refresh_everything(refiner_model_name, base_model_name, loras,
                        base_model_additional_loras=None, use_synthetic_refiner=False, vae_name=None):
-    global final_unet, final_clip, final_vae, final_refiner_unet, final_refiner_vae, final_expansion, final_external_expansion
+    global final_unet, final_clip, final_vae, final_refiner_unet, final_refiner_vae, final_expansion
 
     final_unet = None
     final_clip = None
@@ -263,9 +257,6 @@ def refresh_everything(refiner_model_name, base_model_name, loras,
 
     if final_expansion is None:
         final_expansion = FooocusExpansion()
-    
-    if final_external_expansion is None:
-        final_external_expansion = ExternalLLMExpansion()
 
     prepare_text_encoder(async_call=True)
     clear_all_caches()

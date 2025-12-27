@@ -745,88 +745,10 @@ with shared.gradio_root:
                 sharpness = gr.Slider(label='Image Sharpness', minimum=0.0, maximum=30.0, step=0.001,
                                       value=modules.config.default_sample_sharpness,
                                       info='Higher value means image and texture are sharper.')
-                use_external_llm_expansion = gr.Checkbox(label='Use External LLM for Prompt Expansion', 
-                                                        value=modules.config.default_use_external_llm_expansion,
-                                                        info='Use DeepSeek API for more advanced prompt expansion. Requires DEEPSEEK_API_KEY in config.txt file.')
-                
-                with gr.Accordion(label='DeepSeek System Prompt', open=False):
-                    deepseek_system_prompt_input = gr.Textbox(
-                        label='System Prompt for DeepSeek API',
-                        value=modules.config.deepseek_system_prompt,
-                        lines=10,
-                        placeholder='Enter the system prompt that instructs DeepSeek how to expand prompts...',
-                        info='This prompt defines how DeepSeek will expand your image generation prompts.'
-                    )
-                    with gr.Row():
-                        save_system_prompt_button = gr.Button('Save System Prompt', variant='secondary')
-                        reset_system_prompt_button = gr.Button('Reset to Default', variant='secondary')
-                    system_prompt_status = gr.Textbox(label='Status', lines=1, interactive=False, visible=False)
-                
                 gr.HTML('<a href="https://github.com/lllyasviel/Fooocus/discussions/117" target="_blank">\U0001F4D4 Documentation</a>')
                 dev_mode = gr.Checkbox(label='Developer Debug Mode', value=modules.config.default_developer_debug_mode_checkbox, container=False)
                 
                 # System prompt callbacks
-                def save_deepseek_system_prompt(prompt_text):
-                    """Save DeepSeek system prompt to config"""
-                    try:
-                        import json
-                        config_path = modules.config.config_path
-                        
-                        # Load current config
-                        with open(config_path, 'r', encoding='utf-8') as f:
-                            config_data = json.load(f)
-                        
-                        # Update system prompt
-                        config_data['deepseek_system_prompt'] = prompt_text
-                        
-                        # Save config
-                        with open(config_path, 'w', encoding='utf-8') as f:
-                            json.dump(config_data, f, indent=4)
-                        
-                        # Update runtime config
-                        modules.config.deepseek_system_prompt = prompt_text
-                        
-                        # Update the expansion instance
-                        import modules.default_pipeline as pipeline
-                        if pipeline.final_external_expansion is not None:
-                            pipeline.final_external_expansion.set_system_prompt(prompt_text)
-                        
-                        return gr.update(value='✓ System prompt saved successfully!', visible=True)
-                    except Exception as e:
-                        return gr.update(value=f'✗ Error: {str(e)}', visible=True)
-                
-                def reset_deepseek_system_prompt():
-                    """Reset system prompt to default"""
-                    default_prompt = '''You are an expert at expanding stable diffusion prompts. 
-Your task is to take a short image generation prompt and expand it into a detailed, high-quality prompt that will generate better images.
-
-Guidelines:
-- Add artistic and technical details (lighting, composition, style, mood)
-- Include quality enhancers (highly detailed, masterpiece, best quality, 8k, etc.)
-- Maintain the core concept of the original prompt
-- Keep it concise but descriptive (aim for 50-100 words)
-- Use comma-separated descriptive phrases
-- Do NOT add any explanations or commentary, ONLY return the expanded prompt
-- Focus on visual details that improve image quality
-
-Example:
-Input: "a cat"
-Output: "a highly detailed cat, professional photography, natural lighting, detailed fur texture, sharp focus, high resolution, photorealistic, masterpiece quality, sitting pose, warm colors, soft bokeh background"'''
-                    return default_prompt, gr.update(value='Reset to default', visible=True)
-                
-                save_system_prompt_button.click(
-                    save_deepseek_system_prompt,
-                    inputs=[deepseek_system_prompt_input],
-                    outputs=[system_prompt_status],
-                    show_progress=False
-                )
-                
-                reset_system_prompt_button.click(
-                    reset_deepseek_system_prompt,
-                    outputs=[deepseek_system_prompt_input, system_prompt_status],
-                    show_progress=False
-                )
-
                 with gr.Column(visible=modules.config.default_developer_debug_mode_checkbox) as dev_tools:
                     with gr.Tab(label='Debug Tools'):
                         adm_scaler_positive = gr.Slider(label='Positive ADM Guidance Scaler', minimum=0.1, maximum=3.0,
@@ -1314,7 +1236,6 @@ Output: "a highly detailed cat, professional photography, natural lighting, deta
                   enhance_input_image, enhance_checkbox, enhance_uov_method, enhance_uov_processing_order,
                   enhance_uov_prompt_type]
         ctrls += enhance_ctrls
-        ctrls += [use_external_llm_expansion]  # Add external LLM expansion checkbox
 
         def parse_meta(raw_prompt_txt, is_generating):
             loaded_json = None

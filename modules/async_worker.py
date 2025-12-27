@@ -157,12 +157,6 @@ class AsyncTask:
         self.should_enhance = self.enhance_checkbox and (self.enhance_uov_method != disabled.casefold() or len(self.enhance_ctrls) > 0)
         self.images_to_enhance_count = 0
         self.enhance_stats = {}
-        
-        # External LLM expansion checkbox (safe pop with default)
-        self.use_external_llm_expansion = args.pop() if len(args) > 0 else False
-        
-        # Store expanded prompts for display
-        self.expanded_prompts = []
 
 async_tasks = []
 
@@ -742,18 +736,7 @@ def worker():
 
                 progressbar(async_task, current_progress, f'Preparing Fooocus text #{i + 1} ...')
                 
-                # Choose expansion method based on checkbox
-                if async_task.use_external_llm_expansion and pipeline.final_external_expansion is not None:
-                    if pipeline.final_external_expansion.is_available():
-                        print(f'[Prompt Expansion] Using external LLM expansion')
-                        expansion = pipeline.final_external_expansion(t['task_prompt'], t['task_seed'])
-                        # Store the expanded prompt for display
-                        async_task.expanded_prompts.append(expansion)
-                    else:
-                        print(f'[Prompt Expansion] External LLM not available, falling back to Fooocus expansion')
-                        expansion = pipeline.final_expansion(t['task_prompt'], t['task_seed'])
-                else:
-                    expansion = pipeline.final_expansion(t['task_prompt'], t['task_seed'])
+                expansion = pipeline.final_expansion(t['task_prompt'], t['task_seed'])
                 
                 print(f'[Prompt Expansion] {expansion}')
                 t['expansion'] = expansion

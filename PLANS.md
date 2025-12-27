@@ -11,4 +11,12 @@
 ## Phase 2: Verification
 - [x] Verify Advanced tab visibility fixes.
 - [x] Verify image prompt preprocessing robustness.
-- [ ] Ensure full application stability.
+- [x] Ensure full application stability.
+
+## Phase 3: Deepseek Prompt Enhancement Removal
+- [x] Search for all Deepseek and external LLM references.
+- [x] Remove UI components from `webui.py`.
+- [x] Remove backend configuration from `modules/config.py`.
+- [x] Remove pipeline logic from `modules/async_worker.py` and `modules/default_pipeline.py`.
+- [x] Delete implementation files and documentation.
+- [x] Verify clean removal and app stability.

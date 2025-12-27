@@ -23,8 +23,18 @@
   - **Decisions**: Adopted a robust image loading strategy in `gradio_hijack.py` to support diverse input formats from newer Gradio versions.
   - **Next Goals**: Complete verification and summarize for user.
 
+- **Session 3 (2025-12-27)**:
+  - **Focus**: Removing Deepseek Prompt Enhancement features.
+  - **Completed Tasks**:
+    - Removed Deepseek UI components from `webui.py`.
+    - Removed Deepseek configuration from `modules/config.py`.
+    - Removed `ExternalLLMExpansion` implementation and references from `modules/async_worker.py` and `modules/default_pipeline.py`.
+    - Deleted `extras/llm_expansion.py` and related documentation.
+  - **Decisions**: Fully decoupled external LLM expansion from the core pipeline to maintain simplicity as requested.
+  - **Next Goals**: Finished.
+
 ## Active Context
-- **Current Task**: Fixing `AttributeError: module 'gradio.processing_utils' has no attribute 'encode_pil_to_base64'`.
+- **Current Task**: Completed removal of Deepseek features.
 - **Blockers**: None.
 - **Recent Changes**: Added `AGENTS.md`, `SPEC.md`, `PLANS.md`, `ARCHITECTURE.md`, `CODING-GUIDELINE.md`, `MEMORY_BANK.md`.
 
