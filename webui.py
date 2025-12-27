@@ -1427,7 +1427,14 @@ def dump_default_english_config():
 # dump_default_english_config()
 
 # Create the app manually to add custom routes for viewing logs
-shared.gradio_root.app = shared.gradio_root.create_app()
+try:
+    shared.gradio_root.app = shared.gradio_root.create_app()
+except AttributeError:
+    import gradio.routes
+    if hasattr(gradio.routes, 'create_app'):
+        shared.gradio_root.app = gradio.routes.create_app(shared.gradio_root)
+    else:
+        shared.gradio_root.app = gradio.routes.App.create_app(shared.gradio_root)
 
 @shared.gradio_root.app.get("/view_history_log")
 async def view_history_log(path: str):
