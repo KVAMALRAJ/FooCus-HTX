@@ -158,8 +158,8 @@ class AsyncTask:
         self.images_to_enhance_count = 0
         self.enhance_stats = {}
         
-        # External LLM expansion checkbox
-        self.use_external_llm_expansion = args.pop()
+        # External LLM expansion checkbox (safe pop with default)
+        self.use_external_llm_expansion = args.pop() if len(args) > 0 else False
         
         # Store expanded prompts for display
         self.expanded_prompts = []
@@ -646,9 +646,6 @@ def worker():
 
     def process_prompt(async_task, prompt, negative_prompt, base_model_additional_loras, image_number, disable_seed_increment, use_expansion, use_style,
                        use_synthetic_refiner, current_progress, advance_progress=False):
-        # Clear expanded prompts list for fresh generation
-        async_task.expanded_prompts = []
-        
         prompts = remove_empty_str([safe_str(p) for p in prompt.splitlines()], default='')
         negative_prompts = remove_empty_str([safe_str(p) for p in negative_prompt.splitlines()], default='')
         prompt = prompts[0]
