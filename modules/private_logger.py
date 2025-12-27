@@ -105,8 +105,11 @@ def log(img, metadata, metadata_parser: MetadataParser | None = None, output_for
                 middle_part = existing_split[0]
 
     div_name = only_name.replace('.', '_')
+    full_image_path = os.path.abspath(local_temp_filename).replace('\\', '/')
+    image_url = f"/view_log_image?path={urllib.parse.quote(full_image_path)}"
+    
     item = f"<div id=\"{div_name}\" class=\"image-container\"><hr><table><tr>\n"
-    item += f"<td><a href=\"{only_name}\" target=\"_blank\"><img src='{only_name}' onerror=\"this.closest('.image-container').style.display='none';\" loading='lazy'/></a><div>{only_name}</div></td>"
+    item += f"<td><a href=\"{image_url}\" target=\"_blank\"><img src='{image_url}' onerror=\"this.closest('.image-container').style.display='none';\" loading='lazy'/></a><div>{only_name}</div></td>"
     item += "<td><table class='metadata'>"
     for label, key, value in metadata:
         value_txt = str(value).replace('\n', ' </br> ')
