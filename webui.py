@@ -167,9 +167,17 @@ title = f'Fooocus {fooocus_version.version}'
 if isinstance(args_manager.args.preset, str):
     title += ' ' + args_manager.args.preset
 
+# Prepare custom JavaScript and CSS includes for Gradio v4
+js_files = ['script.js', 'localization.js', 'edit-attention.js', 'viewer.js', 'imageviewer.js', 'contextMenus.js', 'zoom.js']
+head_content = ""
+for js_file in js_files:
+    head_content += f'<script src="file=javascript/{js_file}"></script>\n'
+head_content += '<link rel="stylesheet" href="file=css/style.css">'
+
 shared.gradio_root = gr.Blocks(
     title=title,
-    analytics_enabled=False
+    analytics_enabled=False,
+    head=head_content
 ).queue()
 
 with shared.gradio_root:
@@ -1408,6 +1416,6 @@ shared.gradio_root.launch(
     server_port=args_manager.args.port,
     share=args_manager.args.share,
     auth=check_auth if (args_manager.args.share or args_manager.args.listen) and auth_enabled else None,
-    allowed_paths=[modules.config.path_outputs],
+    allowed_paths=[modules.config.path_outputs, 'javascript', 'css'],
     blocked_paths=[constants.AUTH_FILENAME]
 )

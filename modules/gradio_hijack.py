@@ -573,8 +573,12 @@ def patched_get_api_info(self):
     try:
         return gradio.Blocks.original_get_api_info(self)
     except (TypeError, AttributeError, KeyError) as e:
-        # Return minimal API info structure if generation fails
-        print(f"[Gradio Hijack] Suppressed API info generation error: {type(e).__name__}")
-        return {}
+        # Return minimal but valid API info structure if generation fails
+        print(f"[Gradio Hijack] Warning: API info generation failed ({type(e).__name__}), using fallback")
+        # Return structure that allows basic functionality
+        return {
+            "named_endpoints": {},
+            "unnamed_endpoints": {}
+        }
 
 gradio.Blocks.get_api_info = patched_get_api_info
