@@ -64,6 +64,15 @@ class Image(
     Demos: image_mod, image_mod_default_image
     Guides: image-classification-in-pytorch, image-classification-in-tensorflow, image-classification-with-vision-transformers, building-a-pictionary_app, create-your-own-friends-with-a-gan
     """
+    
+    # Gradio v4 requires EVENTS to be defined for event support
+    EVENTS = [
+        "change",
+        "clear",
+        "select",
+        "stream",
+        "upload",
+    ]
 
     def __init__(
         self,
