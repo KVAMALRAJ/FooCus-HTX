@@ -488,6 +488,19 @@ class Image(
         ):  # If an externally hosted image, don't convert to absolute path
             return input_data
         return str(utils.abspath(input_data))
+    
+    def api_info(self) -> dict[str, Any]:
+        """
+        Gradio v4 requires this method to describe the component's API interface.
+        Returns information about the expected input/output format for the API.
+        """
+        return {
+            "info": {
+                "type": "string",
+                "description": "base64 representation of an image"
+            },
+            "serialized_info": True
+        }
 
 
 all_components = []
