@@ -46,69 +46,84 @@ def generate_clicked(task: worker.AsyncTask):
     execution_start_time = time.perf_counter()
     finished = False
 
-    yield gr.update(visible=True, value=modules.html.make_progress_html(1, 'Waiting for task to start ...')), \
-        gr.update(visible=True, value=None), \
-        gr.update(visible=False, value=None), \
-        gr.update(visible=False), \
-        gr.update(), \
-        gr.update()
+    try:
+        yield gr.update(visible=True, value=modules.html.make_progress_html(1, 'Waiting for task to start ...')), \
+            gr.update(visible=True, value=None), \
+            gr.update(visible=False, value=None), \
+            gr.update(visible=False), \
+            gr.update(), \
+            gr.update()
 
-    worker.async_tasks.append(task)
+        worker.async_tasks.append(task)
 
-    while not finished:
-        time.sleep(0.01)
-        if len(task.yields) > 0:
-            flag, product = task.yields.pop(0)
-            if flag == 'preview':
+        while not finished:
+            time.sleep(0.01)
+            if len(task.yields) > 0:
+                flag, product = task.yields.pop(0)
+                if flag == 'preview':
+                    # help bad internet connection by skipping duplicated preview
+                    if len(task.yields) > 0:  # if we have the next item
+                        if task.yields[0][0] == 'preview':   # if the next item is also a preview
+                            # print('Skipped one preview for better internet connection.')
+                            continue
 
-                # help bad internet connection by skipping duplicated preview
-                if len(task.yields) > 0:  # if we have the next item
-                    if task.yields[0][0] == 'preview':   # if the next item is also a preview
-                        # print('Skipped one preview for better internet connection.')
-                        continue
+                    percentage, title, image = product
+                    yield gr.update(visible=True, value=modules.html.make_progress_html(percentage, title)), \
+                        gr.update(visible=True, value=image) if image is not None else gr.update(), \
+                        gr.update(), \
+                        gr.update(visible=False), \
+                        gr.update(), \
+                        gr.update()
+                if flag == 'results':
+                    yield gr.update(visible=True), \
+                        gr.update(visible=True), \
+                        gr.update(visible=True, value=product), \
+                        gr.update(visible=False), \
+                        gr.update(), \
+                        gr.update()
+                if flag == 'finish':
+                    if not args_manager.args.disable_enhance_output_sorting:
+                        product = sort_enhance_images(product, task)
+                    
+                    # Sort finished images backwards (last generated on top)
+                    if isinstance(product, list):
+                        product = product[::-1]
 
-                percentage, title, image = product
-                yield gr.update(visible=True, value=modules.html.make_progress_html(percentage, title)), \
-                    gr.update(visible=True, value=image) if image is not None else gr.update(), \
-                    gr.update(), \
-                    gr.update(visible=False), \
-                    gr.update(), \
-                    gr.update()
-            if flag == 'results':
-                yield gr.update(visible=True), \
-                    gr.update(visible=True), \
-                    gr.update(visible=True, value=product), \
-                    gr.update(visible=False), \
-                    gr.update(), \
-                    gr.update()
-            if flag == 'finish':
-                if not args_manager.args.disable_enhance_output_sorting:
-                    product = sort_enhance_images(product, task)
-                
-                # Sort finished images backwards (last generated on top)
-                if isinstance(product, list):
-                    product = product[::-1]
+                    # Get expanded prompts if available (with safe check)
+                    expanded_text = ''
+                    accordion_visible = False
+                    if hasattr(task, 'expanded_prompts') and len(task.expanded_prompts) > 0:
+                        expanded_text = '\n\n'.join([f'Prompt {i+1}:\n{p}' for i, p in enumerate(task.expanded_prompts)])
+                        accordion_visible = True
 
-                # Get expanded prompts if available (with safe check)
-                expanded_text = ''
-                accordion_visible = False
-                if hasattr(task, 'expanded_prompts') and len(task.expanded_prompts) > 0:
-                    expanded_text = '\n\n'.join([f'Prompt {i+1}:\n{p}' for i, p in enumerate(task.expanded_prompts)])
-                    accordion_visible = True
+                    yield gr.update(visible=False), \
+                        gr.update(visible=False), \
+                        gr.update(visible=False), \
+                        gr.update(visible=True, value=product), \
+                        gr.update(visible=accordion_visible), \
+                        gr.update(value=expanded_text)
+                    finished = True
 
-                yield gr.update(visible=False), \
-                    gr.update(visible=False), \
-                    gr.update(visible=False), \
-                    gr.update(visible=True, value=product), \
-                    gr.update(visible=accordion_visible), \
-                    gr.update(value=expanded_text)
+                    # delete Fooocus temp images, only keep gradio temp images
+                    if args_manager.args.disable_image_log:
+                        for filepath in product:
+                            if isinstance(filepath, str) and os.path.exists(filepath):
+                                os.remove(filepath)
+            elif not task.processing and len(worker.async_tasks) == 0 and not any(t == task for t in worker.async_tasks):
+                # Safety break if task is no longer processing and not in queue
                 finished = True
-
-                # delete Fooocus temp images, only keep gradio temp images
-                if args_manager.args.disable_image_log:
-                    for filepath in product:
-                        if isinstance(filepath, str) and os.path.exists(filepath):
-                            os.remove(filepath)
+                yield gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update()
+    except Exception as e:
+        print(f'Error in generation: {str(e)}')
+        import traceback
+        traceback.print_exc()
+        yield gr.update(visible=False), \
+            gr.update(visible=False), \
+            gr.update(visible=False), \
+            gr.update(visible=True), \
+            gr.update(visible=False), \
+            gr.update()
+        finished = True
 
     execution_time = time.perf_counter() - execution_start_time
     print(f'Total time: {execution_time:.2f} seconds')
@@ -229,10 +244,10 @@ with shared.gradio_root:
 
                 with gr.Column(scale=3, min_width=0):
                     generate_button = gr.Button(value="Generate", elem_classes='type_row', elem_id='generate_button', visible=True)
-                    reset_button = gr.Button(value="Reconnect", elem_classes='type_row', elem_id='reset_button', visible=False)
-                    load_parameter_button = gr.Button(value="Load Parameters", elem_classes='type_row', elem_id='load_parameter_button', visible=False)
-                    skip_button = gr.Button(value="Skip", elem_classes='type_row_half', elem_id='skip_button', visible=False)
-                    stop_button = gr.Button(value="Stop", elem_classes='type_row_half', elem_id='stop_button', visible=False)
+                    reset_button = gr.Button(value="Reconnect", elem_classes=['type_row', 'hidden'], elem_id='reset_button', visible=True)
+                    load_parameter_button = gr.Button(value="Load Parameters", elem_classes=['type_row', 'hidden'], elem_id='load_parameter_button', visible=True)
+                    skip_button = gr.Button(value="Skip", elem_classes=['type_row_half', 'hidden'], elem_id='skip_button', visible=True)
+                    stop_button = gr.Button(value="Stop", elem_classes=['type_row_half', 'hidden'], elem_id='stop_button', visible=True)
 
                     def stop_clicked(currentTask):
                         import ldm_patched.modules.model_management as model_management
@@ -1246,9 +1261,9 @@ with shared.gradio_root:
                 if is_generating:
                     return gr.update(), gr.update(), gr.update()
                 else:
-                    return gr.update(), gr.update(visible=True), gr.update(visible=False)
+                    return gr.update(), gr.update(elem_classes=['type_row']), gr.update(elem_classes=['type_row', 'hidden'])
 
-            return json.dumps(loaded_json), gr.update(visible=False), gr.update(visible=True)
+            return json.dumps(loaded_json), gr.update(elem_classes=['type_row', 'hidden']), gr.update(elem_classes=['type_row'])
 
         prompt.input(parse_meta, inputs=[prompt, state_is_generating], outputs=[prompt, generate_button, load_parameter_button], queue=False, show_progress=False)
 
@@ -1268,18 +1283,20 @@ with shared.gradio_root:
         metadata_import_button.click(trigger_metadata_import, inputs=[metadata_input_image, state_is_generating], outputs=load_data_outputs, queue=False, show_progress=True) \
             .then(style_sorter.sort_styles, inputs=style_selections, outputs=style_selections, queue=False, show_progress=False)
 
-        generate_button.click(lambda: (gr.update(visible=True, interactive=True), gr.update(visible=True, interactive=True), gr.update(visible=False, interactive=False), [], True),
+        generate_button.click(lambda: (gr.update(elem_classes=['type_row_half'], interactive=True), gr.update(elem_classes=['type_row_half'], interactive=True), gr.update(elem_classes=['type_row', 'hidden'], interactive=False), [], True),
                               outputs=[stop_button, skip_button, generate_button, gallery, state_is_generating]) \
             .then(fn=refresh_seed, inputs=[seed_random, image_seed], outputs=image_seed) \
             .then(fn=get_task, inputs=ctrls, outputs=currentTask) \
             .then(fn=generate_clicked, inputs=currentTask, outputs=[progress_html, progress_window, progress_gallery, gallery, expanded_prompt_accordion, expanded_prompt_display]) \
-            .then(lambda: (gr.update(visible=True, interactive=True), gr.update(visible=False, interactive=False), gr.update(visible=False, interactive=False), False),
+            .then(lambda: (gr.update(elem_classes=['type_row'], interactive=True), gr.update(elem_classes=['type_row_half', 'hidden'], interactive=False), gr.update(elem_classes=['type_row_half', 'hidden'], interactive=False), False),
                   outputs=[generate_button, stop_button, skip_button, state_is_generating]) \
             .then(fn=update_history_link, outputs=history_link) \
             .then(fn=lambda: None, js='playNotification').then(fn=lambda: None, js='refresh_grid_delayed')
 
-        reset_button.click(lambda: [worker.AsyncTask(args=[]), False, gr.update(visible=True, interactive=True)] +
-                                   [gr.update(visible=False)] * 6 +
+        reset_button.click(lambda: [worker.AsyncTask(args=[]), False, gr.update(elem_classes=['type_row'], interactive=True)] +
+                                   [gr.update(elem_classes=['type_row', 'hidden'])] +
+                                   [gr.update(elem_classes=['type_row_half', 'hidden'])] * 2 +
+                                   [gr.update(visible=False)] * 4 +
                                    [gr.update(visible=True, value=[])],
                            outputs=[currentTask, state_is_generating, generate_button,
                                     reset_button, stop_button, skip_button,

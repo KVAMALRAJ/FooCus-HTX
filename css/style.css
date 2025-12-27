@@ -91,6 +91,10 @@ div:has(> #positive_prompt) {
   height: 34px !important;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .refresh_button {
   border: none !important;
   background: none !important;

@@ -150,13 +150,39 @@ addObserverIfDesiredNodeAvailable(".toast-wrap", function(added) {
     added.forEach(function(element) {
          if (element.innerText.includes("Connection errored out.")) {
              window.setTimeout(function() {
-                document.getElementById("reset_button").classList.remove("hidden");
-                document.getElementById("generate_button").classList.add("hidden");
-                document.getElementById("skip_button").classList.add("hidden");
-                document.getElementById("stop_button").classList.add("hidden");
+                const resetButton = document.getElementById("reset_button");
+                const generateButton = document.getElementById("generate_button");
+                const skipButton = document.getElementById("skip_button");
+                const stopButton = document.getElementById("stop_button");
+
+                if (resetButton) resetButton.classList.remove("hidden");
+                if (generateButton) generateButton.classList.add("hidden");
+                if (skipButton) skipButton.classList.add("hidden");
+                if (stopButton) stopButton.classList.add("hidden");
             });
          }
     });
+});
+
+/**
+ * Handle reset button click to restore UI state
+ */
+onUiLoaded(function() {
+    const resetButton = document.getElementById("reset_button");
+    if (resetButton) {
+        resetButton.addEventListener("click", function() {
+            window.setTimeout(function() {
+                const generateButton = document.getElementById("generate_button");
+                const skipButton = document.getElementById("skip_button");
+                const stopButton = document.getElementById("stop_button");
+
+                if (generateButton) generateButton.classList.remove("hidden");
+                if (skipButton) skipButton.classList.add("hidden");
+                if (stopButton) stopButton.classList.add("hidden");
+                resetButton.classList.add("hidden");
+            }, 500);
+        });
+    }
 });
 
 /**

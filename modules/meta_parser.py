@@ -54,9 +54,9 @@ def load_parameter_button_click(raw_metadata: dict | str, is_generating: bool, i
     if is_generating:
         results.append(gr.update())
     else:
-        results.append(gr.update(visible=True))
+        results.append(gr.update(elem_classes=['type_row']))
 
-    results.append(gr.update(visible=False))
+    results.append(gr.update(elem_classes=['type_row', 'hidden']))
 
     get_freeu('freeu', 'FreeU', loaded_parameter_dict, results)
 
