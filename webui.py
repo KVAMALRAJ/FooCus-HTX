@@ -1427,32 +1427,40 @@ def dump_default_english_config():
 # dump_default_english_config()
 
 # Create the app manually to add custom routes for viewing logs
-try:
-    shared.gradio_root.app = shared.gradio_root.create_app()
-except AttributeError:
-    import gradio.routes
-    if hasattr(gradio.routes, 'create_app'):
-        shared.gradio_root.app = gradio.routes.create_app(shared.gradio_root)
-    else:
-        shared.gradio_root.app = gradio.routes.App.create_app(shared.gradio_root)
+def setup_custom_routes(app):
+    @app.get("/view_history_log")
+    async def view_history_log(path: str):
+        import os
+        from fastapi.responses import FileResponse
+        from fastapi import HTTPException
+        
+        # Security: check if path is within outputs directory or temp directory
+        abs_path = os.path.abspath(path)
+        abs_outputs = os.path.abspath(modules.config.path_outputs)
+        abs_temp = os.path.abspath(modules.config.temp_path)
+        
+        if not (abs_path.startswith(abs_outputs) or abs_path.startswith(abs_temp)):
+             raise HTTPException(status_code=403, detail="Access denied")
+             
+        if os.path.exists(abs_path) and abs_path.endswith(".html"):
+            return FileResponse(abs_path, media_type="text/html")
+        raise HTTPException(status_code=404, detail="File not found")
 
-@shared.gradio_root.app.get("/view_history_log")
-async def view_history_log(path: str):
-    import os
-    from fastapi.responses import FileResponse
-    from fastapi import HTTPException
-    
-    # Security: check if path is within outputs directory or temp directory
-    abs_path = os.path.abspath(path)
-    abs_outputs = os.path.abspath(modules.config.path_outputs)
-    abs_temp = os.path.abspath(modules.config.temp_path)
-    
-    if not (abs_path.startswith(abs_outputs) or abs_path.startswith(abs_temp)):
-         raise HTTPException(status_code=403, detail="Access denied")
-         
-    if os.path.exists(abs_path) and abs_path.endswith(".html"):
-        return FileResponse(abs_path, media_type="text/html")
-    raise HTTPException(status_code=404, detail="File not found")
+# Use Blocks.launch with a custom app setup
+from fastapi import FastAPI
+from gradio.routes import App
+
+# Gradio launch will create the app if it doesn't exist, but we need to inject routes
+# before it starts listening. We can do this by patching the App class or using a wrapper.
+
+original_create_app = App.create_app
+
+def patched_create_app(*args, **kwargs):
+    app = original_create_app(*args, **kwargs)
+    setup_custom_routes(app)
+    return app
+
+App.create_app = patched_create_app
 
 shared.gradio_root.launch(
     inbrowser=args_manager.args.in_browser,
