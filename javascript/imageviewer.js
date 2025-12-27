@@ -5,9 +5,26 @@ function closeModal() {
 }
 
 function showModal(event) {
-    const source = event.target || event.srcElement;
+    let source = event.target || event.srcElement;
+    
+    // Find the actual image element if we clicked on a container
+    if (source.tagName !== 'IMG') {
+        source = source.querySelector('img') || source.closest('.image_gallery')?.querySelector('img');
+    }
+    
+    if (!source || !source.src) {
+        console.error("Fooocus Image Viewer: Could not find image source", event.target);
+        return;
+    }
+
     const modalImage = gradioApp().getElementById("modalImage");
     const lb = gradioApp().getElementById("lightboxModal");
+    
+    if (!modalImage || !lb) {
+        console.error("Fooocus Image Viewer: Lightbox elements not found");
+        return;
+    }
+
     modalImage.src = source.src;
     if (modalImage.style.display === 'none') {
         lb.style.setProperty('background-image', 'url(' + source.src + ')');

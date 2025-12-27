@@ -168,8 +168,7 @@ title = f'Fooocus {fooocus_version.version}'
 if isinstance(args_manager.args.preset, str):
     title += ' ' + args_manager.args.preset
 
-# Prepare custom JavaScript and CSS includes for Gradio v4
-# Using absolute paths from workspace root
+# Prepare custom JavaScript includes for Gradio v4
 import pathlib
 workspace_path = pathlib.Path(__file__).parent.absolute()
 js_files = ['script.js', 'localization.js', 'edit-attention.js', 'viewer.js', 'imageviewer.js', 'contextMenus.js', 'zoom.js']
@@ -177,13 +176,18 @@ head_content = ""
 for js_file in js_files:
     js_path = workspace_path / 'javascript' / js_file
     head_content += f'<script src="file={js_path}"></script>\n'
+
+# Read CSS content for direct injection
+css_content = ""
 css_path = workspace_path / 'css' / 'style.css'
-head_content += f'<link rel="stylesheet" href="file={css_path}">'
+if css_path.exists():
+    css_content = css_path.read_text(encoding='utf-8')
 
 shared.gradio_root = gr.Blocks(
     title=title,
     analytics_enabled=False,
-    head=head_content
+    head=head_content,
+    css=css_content
 ).queue()
 
 with shared.gradio_root:

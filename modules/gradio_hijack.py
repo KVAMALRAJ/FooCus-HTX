@@ -378,36 +378,44 @@ class Image(
 
     def postprocess(
         self, y: np.ndarray | _Image.Image | str | Path | None
-    ) -> str | None:
+    ) -> dict | None:
         """
         Parameters:
             y: image as a numpy array, PIL Image, string/Path filepath, or string URL
         Returns:
-            base64 url data
+            base64 url data in a dict for Gradio v4
         """
         if y is None:
             return None
         
-        # If it's already a base64 string, return as is
+        res = None
+        # If it's already a base64 string
         if isinstance(y, str) and y.startswith("data:image/"):
-            return y
-
-        if isinstance(y, np.ndarray):
+            res = y
+        elif isinstance(y, np.ndarray):
             # Gradio v4 removed encode_array_to_base64, convert to PIL first
-            from PIL import Image as PILImage
             if y.dtype == np.uint8:
-                pil_image = PILImage.fromarray(y)
+                pil_image = _Image.fromarray(y)
             else:
                 # Normalize to 0-255 uint8
                 y_normalized = ((y - y.min()) / (y.max() - y.min()) * 255).astype(np.uint8)
-                pil_image = PILImage.fromarray(y_normalized)
-            return _encode_pil_to_base64(pil_image)
+                pil_image = _Image.fromarray(y_normalized)
+            res = _encode_pil_to_base64(pil_image)
         elif isinstance(y, _Image.Image):
-            return _encode_pil_to_base64(y)
+            res = _encode_pil_to_base64(y)
         elif isinstance(y, (str, Path)):
-            return client_utils.encode_url_or_file_to_base64(y)
+            res = client_utils.encode_url_or_file_to_base64(y)
         else:
-            raise ValueError("Cannot process this value as an Image")
+            raise ValueError(f"Cannot process this value as an Image: {type(y)}")
+
+        return {
+            "path": None,
+            "url": res,
+            "size": None,
+            "orig_name": None,
+            "mime_type": "image/png",
+            "is_file": False
+        }
 
     def set_interpret_parameters(self, segments: int = 16):
         """
