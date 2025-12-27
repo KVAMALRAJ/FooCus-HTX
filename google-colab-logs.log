@@ -1,0 +1,152 @@
+!pip install pygit2==1.15.1
+!pip install requests
+#%rm -R /content/FooCus-HTX
+%cd /content
+#!git clone https://github.com/lllyasviel/Fooocus.git
+!git clone https://github.com/KVAMALRAJ/FooCus-HTX.git
+%cd /content/FooCus-HTX/
+!python entry_with_update.py --share --always-high-vram  --debug-mode --always-offload-from-vram --disable-server-log
+
+
+
+Cell outputs : 
+
+Requirement already satisfied: pygit2==1.15.1 in /usr/local/lib/python3.11/dist-packages (1.15.1)
+Requirement already satisfied: cffi>=1.16.0 in /usr/local/lib/python3.11/dist-packages (from pygit2==1.15.1) (1.17.1)
+Requirement already satisfied: pycparser in /usr/local/lib/python3.11/dist-packages (from cffi>=1.16.0->pygit2==1.15.1) (2.22)
+Requirement already satisfied: requests in /usr/local/lib/python3.11/dist-packages (2.31.0)
+Requirement already satisfied: charset-normalizer<4,>=2 in /usr/local/lib/python3.11/dist-packages (from requests) (3.4.2)
+Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.11/dist-packages (from requests) (3.10)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.11/dist-packages (from requests) (2.4.0)
+Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.11/dist-packages (from requests) (2025.7.14)
+/content
+fatal: destination path 'FooCus-HTX' already exists and is not an empty directory.
+/content/FooCus-HTX
+Fast-forward merge
+Update succeeded.
+[System ARGV] ['entry_with_update.py', '--share', '--always-high-vram', '--debug-mode', '--always-offload-from-vram', '--disable-server-log']
+Python 3.11.13 (main, Jun  4 2025, 08:57:29) [GCC 11.4.0]
+Fooocus version: 2.5.5
+[Cleanup] Attempting to delete content of temp dir /tmp/fooocus
+[Cleanup] Cleanup successful
+Total VRAM 15095 MB, total RAM 12976 MB
+Set vram state to: HIGH_VRAM
+Always offload VRAM
+Device: cuda:0 Tesla T4 : native
+VAE dtype: torch.float32
+Using pytorch cross attention
+Refiner unloaded.
+Running on local URL:  http://127.0.0.1:7865
+[Gradio Hijack] API info generation encountered TypeError: argument of type 'bool' is not iterable
+[Gradio Hijack] Using simplified API info structure
+[Gradio Hijack] Fallback API generation also failed: 'Blocks' object has no attribute 'dependencies'
+model_type EPS
+UNet ADM Dimension 2816
+Running on public URL: https://23ef69fabf7bba0d3f.gradio.live
+
+This share link expires in 72 hours. For free permanent hosting and GPU upgrades, run `gradio deploy` from Terminal to deploy to Spaces (https://huggingface.co/spaces)
+Using pytorch attention in VAE
+Working with z of shape (1, 4, 32, 32) = 4096 dimensions.
+Using pytorch attention in VAE
+extra {'cond_stage_model.clip_l.logit_scale', 'cond_stage_model.clip_l.text_projection'}
+left over keys: dict_keys(['cond_stage_model.clip_l.transformer.text_model.embeddings.position_ids'])
+loaded straight to GPU
+Requested to load SDXL
+Loading 1 new model
+Base model loaded: /content/FooCus-HTX/models/checkpoints/juggernautXL_v8Rundiffusion.safetensors
+VAE loaded: None
+Request to load LoRAs [('sd_xl_offset_example-lora_1.0.safetensors', 0.1)] for model [/content/FooCus-HTX/models/checkpoints/juggernautXL_v8Rundiffusion.safetensors].
+Loaded LoRA [/content/FooCus-HTX/models/loras/sd_xl_offset_example-lora_1.0.safetensors] for UNet [/content/FooCus-HTX/models/checkpoints/juggernautXL_v8Rundiffusion.safetensors] with 788 keys at weight 0.1.
+Fooocus V2 Expansion: Vocab with 642 words.
+Fooocus Expansion engine loaded for cuda:0, use_fp16 = True.
+Requested to load SDXLClipModel
+Requested to load GPT2LMHeadModel
+Loading 2 new models
+[Fooocus Model Management] Moving model(s) has taken 0.59 seconds
+2025-12-27 13:52:10.599592: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:477] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+E0000 00:00:1766843530.676042   24565 cuda_dnn.cc:8310] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+E0000 00:00:1766843530.697946   24565 cuda_blas.cc:1418] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-12-27 13:52:11.045895: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Started worker with PID 24484
+App started successful. Use the app with http://127.0.0.1:7865/ or 127.0.0.1:7865 or https://23ef69fabf7bba0d3f.gradio.live
+[Parameters] Adaptive CFG = 7
+[Parameters] CLIP Skip = 2
+[Parameters] Sharpness = 2
+[Parameters] ControlNet Softness = 0.25
+[Parameters] ADM Scale = 1.5 : 0.8 : 0.3
+[Parameters] Seed = 7269485292659366641
+[Parameters] CFG = 4
+[Fooocus] Loading control models ...
+[Parameters] Sampler = dpmpp_2m_sde_gpu - karras
+[Parameters] Steps = 30 - 15
+[Fooocus] Initializing ...
+[Fooocus] Loading models ...
+Refiner unloaded.
+[Fooocus] Processing prompts ...
+[Fooocus] Preparing Fooocus text #1 ...
+[Prompt Expansion] Mature malayali lady showign her breast, modern fine fashionable contemporary stylish, very detailed, intricate, elegant, sparkling, luxury, dramatic professional color, sharp focus, extremely beautiful, glowing, magical, mystical colors, radiant light, vivid, clear, aesthetic, amazing, emotional, shiny, attractive, pretty, illuminated, colorful, surreal, highly saturated, epic composition
+[Fooocus] Preparing Fooocus text #2 ...
+[Prompt Expansion] Mature malayali lady showign her breast, modern, stylish, amazing, elegant, intricate, highly detailed, wonderful, dramatic ambient light, sharp focus, beautiful composition, very inspirational, cute, fine detail, pretty, confident, clear quality, original, dynamic, strong background, professional, artistic, thought, iconic, best, novel, romantic, new, fabulous
+[Fooocus] Encoding positive #1 ...
+[Fooocus Model Management] Moving model(s) has taken 0.13 seconds
+[Fooocus] Encoding positive #2 ...
+[Fooocus] Encoding negative #1 ...
+[Fooocus] Encoding negative #2 ...
+[Parameters] Denoising Strength = 1.0
+[Parameters] Initial Latent shape: Image Space (896, 1152)
+Preparation time: 2.54 seconds
+Using karras scheduler.
+[Fooocus] Preparing task 1/2 ...
+[Sampler] refiner_swap_method = joint
+[Sampler] sigma_min = 0.0291671771556139, sigma_max = 14.614643096923828
+Requested to load SDXL
+Loading 1 new model
+[Fooocus Model Management] Moving model(s) has taken 1.89 seconds
+  3% 1/30 [00:01<00:42,  1.47s/it]Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/dist-packages/gradio/queueing.py", line 575, in process_events
+    response = await route_utils.call_process_api(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/gradio/route_utils.py", line 322, in call_process_api
+    output = await app.get_blocks().process_api(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/gradio/blocks.py", line 1945, in process_api
+    data = await self.postprocess_data(block_fn, result["prediction"], state)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/gradio/blocks.py", line 1756, in postprocess_data
+    prediction_value = postprocess_update_dict(
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/gradio/blocks.py", line 622, in postprocess_update_dict
+    update_dict["value"] = block.postprocess(value)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/content/FooCus-HTX/modules/gradio_hijack.py", line 369, in postprocess
+    return processing_utils.encode_pil_to_base64(pil_image)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'gradio.processing_utils' has no attribute 'encode_pil_to_base64'
+100% 30/30 [00:26<00:00,  1.13it/s]
+Requested to load AutoencoderKL
+Loading 1 new model
+[Fooocus Model Management] Moving model(s) has taken 0.27 seconds
+[Fooocus] Saving image 1/2 to system ...
+Image generated with private log at: /content/FooCus-HTX/outputs/2025-12-27/log.html
+Generating and saving time: 31.78 seconds
+[Fooocus] Preparing task 2/2 ...
+[Sampler] refiner_swap_method = joint
+[Sampler] sigma_min = 0.0291671771556139, sigma_max = 14.614643096923828
+Requested to load SDXL
+Loading 1 new model
+[Fooocus Model Management] Moving model(s) has taken 0.67 seconds
+100% 30/30 [00:26<00:00,  1.12it/s]
+Requested to load AutoencoderKL
+Loading 1 new model
+[Fooocus Model Management] Moving model(s) has taken 0.31 seconds
+[Fooocus] Saving image 2/2 to system ...
+Image generated with private log at: /content/FooCus-HTX/outputs/2025-12-27/log.html
+Generating and saving time: 30.38 seconds
+[Enhance] Skipping, preconditions aren't met
+Processing time (total): 62.16 seconds
+Requested to load SDXLClipModel
+Requested to load GPT2LMHeadModel
+Loading 2 new models
+[Fooocus Model Management] Moving model(s) has taken 0.79 seconds

@@ -18,6 +18,29 @@ from gradio_client.serializing import ImgSerializable
 from PIL import Image as _Image  # using _ to minimize namespace pollution
 
 from gradio import processing_utils, utils, Error
+
+import io
+import base64
+
+if not hasattr(processing_utils, 'encode_pil_to_base64'):
+    def encode_pil_to_base64(pil_image):
+        buffered = io.BytesIO()
+        pil_image.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        return f"data:image/png;base64,{img_str}"
+    processing_utils.encode_pil_to_base64 = encode_pil_to_base64
+
+if not hasattr(processing_utils, 'decode_base64_to_image'):
+    def decode_base64_to_image(encoding):
+        content = encoding.split(";")[1]
+        image_encoded = content.split(",")[1]
+        return _Image.open(io.BytesIO(base64.b64decode(image_encoded)))
+    processing_utils.decode_base64_to_image = decode_base64_to_image
+
+if not hasattr(processing_utils, 'resize_and_crop'):
+    def resize_and_crop(img, size, crop_type='center'):
+        return PIL.ImageOps.fit(img, size, centering=(0.5, 0.5) if crop_type == 'center' else (0, 0))
+    processing_utils.resize_and_crop = resize_and_crop
 try:
     from gradio.components.base import Component as IOComponent, Block
 except ImportError:
@@ -601,9 +624,19 @@ def patched_get_api_info(self):
             }
             
             # Iterate through dependencies to build endpoint info
-            for dep in self.dependencies:
-                if dep.get("api_name"):
-                    endpoint_name = dep["api_name"]
+            deps = getattr(self, "dependencies", [])
+            if not deps and hasattr(self, "fns"):
+                deps = self.fns
+
+            for dep in deps:
+                api_name = None
+                if isinstance(dep, dict):
+                    api_name = dep.get("api_name")
+                elif hasattr(dep, "api_name"):
+                    api_name = dep.api_name
+
+                if api_name:
+                    endpoint_name = api_name
                     api_info["named_endpoints"][f"/{endpoint_name}"] = {
                         "parameters": [],
                         "returns": []
