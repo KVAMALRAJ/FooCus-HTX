@@ -501,6 +501,20 @@ class Image(
             },
             "serialized_info": True
         }
+    
+    def example_payload(self) -> Any:
+        """
+        Gradio v4 requires this method to provide example payload for API documentation.
+        Returns an example of the expected input format.
+        """
+        return "https://raw.githubusercontent.com/gradio-app/gradio/main/test/test_files/bus.png"
+    
+    def example_inputs(self) -> Any:
+        """
+        Gradio v4 requires this method to provide example inputs for the component.
+        Returns an example input value.
+        """
+        return "https://raw.githubusercontent.com/gradio-app/gradio/main/test/test_files/bus.png"
 
 
 all_components = []
