@@ -856,8 +856,7 @@ Output: "a highly detailed cat, professional photography, natural lighting, deta
                     datatype=['str', 'str', 'str'],
                     col_count=(3, 'fixed'),
                     interactive=False,
-                    wrap=True,
-                    max_rows=20
+                    wrap=True
                 )
                 
                 with gr.Row():
