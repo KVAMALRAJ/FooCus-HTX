@@ -358,13 +358,15 @@ class Image(
         if y is None:
             return None
         if isinstance(y, np.ndarray):
-            # Gradio v4 renamed encode_array_to_base64 to encode_array_to_base64
-            # Try new name first, fallback to client_utils if needed
-            try:
-                return processing_utils.encode_array_to_base64(y)
-            except AttributeError:
-                from gradio_client import utils as client_utils
-                return client_utils.encode_array_to_base64(y)
+            # Gradio v4 removed encode_array_to_base64, convert to PIL first
+            from PIL import Image as PILImage
+            if y.dtype == np.uint8:
+                pil_image = PILImage.fromarray(y)
+            else:
+                # Normalize to 0-255 uint8
+                y_normalized = ((y - y.min()) / (y.max() - y.min()) * 255).astype(np.uint8)
+                pil_image = PILImage.fromarray(y_normalized)
+            return processing_utils.encode_pil_to_base64(pil_image)
         elif isinstance(y, _Image.Image):
             return processing_utils.encode_pil_to_base64(y)
         elif isinstance(y, (str, Path)):
@@ -431,11 +433,10 @@ class Image(
             mask = segments_slic == segment_value
             image_screen = np.copy(resized_and_cropped_image)
             image_screen[segments_slic == segment_value] = replace_color
-            try:
-                encoded = processing_utils.encode_array_to_base64(image_screen)
-            except AttributeError:
-                from gradio_client import utils as client_utils
-                encoded = client_utils.encode_array_to_base64(image_screen)
+            # Convert numpy array to PIL for encoding
+            from PIL import Image as PILImage
+            pil_img = PILImage.fromarray(image_screen.astype(np.uint8))
+            encoded = processing_utils.encode_pil_to_base64(pil_img)
             leave_one_out_tokens.append(encoded)
             token = np.copy(resized_and_cropped_image)
             token[segments_slic != segment_value] = 0
@@ -449,11 +450,10 @@ class Image(
             masked_input = np.zeros_like(tokens[0], dtype=int)
             for token, b in zip(tokens, binary_mask_vector):
                 masked_input = masked_input + token * int(b)
-            try:
-                encoded = processing_utils.encode_array_to_base64(masked_input)
-            except AttributeError:
-                from gradio_client import utils as client_utils
-                encoded = client_utils.encode_array_to_base64(masked_input)
+            # Convert numpy array to PIL for encoding
+            from PIL import Image as PILImage
+            pil_img = PILImage.fromarray(masked_input.astype(np.uint8))
+            encoded = processing_utils.encode_pil_to_base64(pil_img)
             masked_inputs.append(encoded)
         return masked_inputs
 

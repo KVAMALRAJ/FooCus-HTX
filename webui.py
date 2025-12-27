@@ -155,7 +155,7 @@ def inpaint_mode_change(mode, inpaint_engine_version):
 
     return [
         gr.update(visible=False, value=''), gr.update(visible=True),
-        gr.Dataset.update(visible=False, samples=modules.config.example_inpaint_prompts),
+        gr.update(visible=False, samples=modules.config.example_inpaint_prompts),
         False, inpaint_engine_version, 1.0, 0.618
     ]
 
@@ -175,9 +175,9 @@ js_files = ['script.js', 'localization.js', 'edit-attention.js', 'viewer.js', 'i
 head_content = ""
 for js_file in js_files:
     js_path = workspace_path / 'javascript' / js_file
-    head_content += f'<script type="module" src="file={js_path}"></script>\n'
+    head_content += f'<script src="file={js_path}"></script>\n'
 css_path = workspace_path / 'css' / 'style.css'
-head_content += f'<link rel="stylesheet" href="file={css_path}">'
+head_content += f'<link rel="stylesheet" href="file={css_path}>"'
 
 shared.gradio_root = gr.Blocks(
     title=title,
