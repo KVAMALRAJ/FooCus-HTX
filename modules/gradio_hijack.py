@@ -358,7 +358,13 @@ class Image(
         if y is None:
             return None
         if isinstance(y, np.ndarray):
-            return processing_utils.encode_array_to_base64(y)
+            # Gradio v4 renamed encode_array_to_base64 to encode_array_to_base64
+            # Try new name first, fallback to client_utils if needed
+            try:
+                return processing_utils.encode_array_to_base64(y)
+            except AttributeError:
+                from gradio_client import utils as client_utils
+                return client_utils.encode_array_to_base64(y)
         elif isinstance(y, _Image.Image):
             return processing_utils.encode_pil_to_base64(y)
         elif isinstance(y, (str, Path)):
@@ -425,9 +431,12 @@ class Image(
             mask = segments_slic == segment_value
             image_screen = np.copy(resized_and_cropped_image)
             image_screen[segments_slic == segment_value] = replace_color
-            leave_one_out_tokens.append(
-                processing_utils.encode_array_to_base64(image_screen)
-            )
+            try:
+                encoded = processing_utils.encode_array_to_base64(image_screen)
+            except AttributeError:
+                from gradio_client import utils as client_utils
+                encoded = client_utils.encode_array_to_base64(image_screen)
+            leave_one_out_tokens.append(encoded)
             token = np.copy(resized_and_cropped_image)
             token[segments_slic != segment_value] = 0
             tokens.append(token)
@@ -440,7 +449,12 @@ class Image(
             masked_input = np.zeros_like(tokens[0], dtype=int)
             for token, b in zip(tokens, binary_mask_vector):
                 masked_input = masked_input + token * int(b)
-            masked_inputs.append(processing_utils.encode_array_to_base64(masked_input))
+            try:
+                encoded = processing_utils.encode_array_to_base64(masked_input)
+            except AttributeError:
+                from gradio_client import utils as client_utils
+                encoded = client_utils.encode_array_to_base64(masked_input)
+            masked_inputs.append(encoded)
         return masked_inputs
 
     def get_interpretation_scores(
@@ -566,19 +580,42 @@ if not hasattr(gradio.Blocks, 'original_get_api_info'):
 
 def patched_get_api_info(self):
     """
-    Patched version that catches and suppresses API info generation errors.
+    Patched version that catches and handles API info generation errors gracefully.
     This prevents TypeError from breaking the application when Gradio v4
-    tries to parse complex component schemas.
+    tries to parse complex component schemas with nested structures.
     """
     try:
-        return gradio.Blocks.original_get_api_info(self)
-    except (TypeError, AttributeError, KeyError) as e:
-        # Return minimal but valid API info structure if generation fails
-        print(f"[Gradio Hijack] Warning: API info generation failed ({type(e).__name__}), using fallback")
-        # Return structure that allows basic functionality
-        return {
-            "named_endpoints": {},
-            "unnamed_endpoints": {}
-        }
+        result = gradio.Blocks.original_get_api_info(self)
+        return result
+    except (TypeError, AttributeError, KeyError, RecursionError) as e:
+        # Detailed error logging for debugging
+        print(f"[Gradio Hijack] API info generation encountered {type(e).__name__}: {str(e)[:200]}")
+        print("[Gradio Hijack] Using simplified API info structure")
+        
+        # Build a minimal but functional API info manually
+        try:
+            # Try to get basic endpoint info without full schema generation
+            api_info = {
+                "named_endpoints": {},
+                "unnamed_endpoints": {}
+            }
+            
+            # Iterate through dependencies to build endpoint info
+            for dep in self.dependencies:
+                if dep.get("api_name"):
+                    endpoint_name = dep["api_name"]
+                    api_info["named_endpoints"][f"/{endpoint_name}"] = {
+                        "parameters": [],
+                        "returns": []
+                    }
+            
+            return api_info
+        except Exception as fallback_error:
+            print(f"[Gradio Hijack] Fallback API generation also failed: {fallback_error}")
+            # Return absolute minimum structure
+            return {
+                "named_endpoints": {},
+                "unnamed_endpoints": {}
+            }
 
 gradio.Blocks.get_api_info = patched_get_api_info

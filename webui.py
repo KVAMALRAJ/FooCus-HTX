@@ -139,7 +139,7 @@ def inpaint_mode_change(mode, inpaint_engine_version):
     if mode == modules.flags.inpaint_option_detail:
         return [
             gr.update(visible=True), gr.update(visible=False, value=[]),
-            gr.Dataset.update(visible=True, samples=modules.config.example_inpaint_prompts),
+            gr.update(visible=True, samples=modules.config.example_inpaint_prompts),
             False, 'None', 0.5, 0.0
         ]
 
@@ -168,11 +168,16 @@ if isinstance(args_manager.args.preset, str):
     title += ' ' + args_manager.args.preset
 
 # Prepare custom JavaScript and CSS includes for Gradio v4
+# Using absolute paths from workspace root
+import pathlib
+workspace_path = pathlib.Path(__file__).parent.absolute()
 js_files = ['script.js', 'localization.js', 'edit-attention.js', 'viewer.js', 'imageviewer.js', 'contextMenus.js', 'zoom.js']
 head_content = ""
 for js_file in js_files:
-    head_content += f'<script src="file=javascript/{js_file}"></script>\n'
-head_content += '<link rel="stylesheet" href="file=css/style.css">'
+    js_path = workspace_path / 'javascript' / js_file
+    head_content += f'<script type="module" src="file={js_path}"></script>\n'
+css_path = workspace_path / 'css' / 'style.css'
+head_content += f'<link rel="stylesheet" href="file={css_path}">'
 
 shared.gradio_root = gr.Blocks(
     title=title,
@@ -360,7 +365,7 @@ with shared.gradio_root:
 
                                 inpaint_mask_model.change(lambda x: [gr.update(visible=x == 'u2net_cloth_seg')] +
                                                                     [gr.update(visible=x == 'sam')] * 2 +
-                                                                    [gr.Dataset.update(visible=x == 'sam',
+                                                                    [gr.update(visible=x == 'sam',
                                                                                        samples=modules.config.example_enhance_detection_prompts)],
                                                           inputs=inpaint_mask_model,
                                                           outputs=[inpaint_mask_cloth_category,
@@ -568,7 +573,7 @@ with shared.gradio_root:
                         enhance_mask_model.change(
                             lambda x: [gr.update(visible=x == 'u2net_cloth_seg')] +
                                       [gr.update(visible=x == 'sam')] * 2 +
-                                      [gr.Dataset.update(visible=x == 'sam',
+                                      [gr.update(visible=x == 'sam',
                                                          samples=modules.config.example_enhance_detection_prompts)],
                             inputs=enhance_mask_model,
                             outputs=[enhance_mask_cloth_category, enhance_mask_dino_prompt_text, sam_options,
