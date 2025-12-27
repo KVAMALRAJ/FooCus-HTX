@@ -660,7 +660,9 @@ with shared.gradio_root:
                     if args_manager.args.disable_image_log:
                         return gr.update(value='')
 
-                    return gr.update(value=f'<a href="file={get_current_html_path(output_format)}" target="_blank">\U0001F4DA History Log</a>')
+                    # Use None to get default output format path
+                    path = get_current_html_path(None)
+                    return gr.update(value=f'<a href="/view_history_log?path={path}" target="_blank">\U0001F4DA History Log</a>')
 
                 history_link = gr.HTML()
                 shared.gradio_root.load(update_history_link, outputs=history_link, queue=False, show_progress=False)
@@ -1419,6 +1421,27 @@ def dump_default_english_config():
 
 
 # dump_default_english_config()
+
+# Create the app manually to add custom routes for viewing logs
+shared.gradio_root.app = shared.gradio_root.create_app()
+
+@shared.gradio_root.app.get("/view_history_log")
+async def view_history_log(path: str):
+    import os
+    from fastapi.responses import FileResponse
+    from fastapi import HTTPException
+    
+    # Security: check if path is within outputs directory or temp directory
+    abs_path = os.path.abspath(path)
+    abs_outputs = os.path.abspath(modules.config.path_outputs)
+    abs_temp = os.path.abspath(modules.config.temp_path)
+    
+    if not (abs_path.startswith(abs_outputs) or abs_path.startswith(abs_temp)):
+         raise HTTPException(status_code=403, detail="Access denied")
+         
+    if os.path.exists(abs_path) and abs_path.endswith(".html"):
+        return FileResponse(abs_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="File not found")
 
 shared.gradio_root.launch(
     inbrowser=args_manager.args.in_browser,
