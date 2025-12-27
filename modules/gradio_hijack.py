@@ -30,6 +30,9 @@ if not hasattr(processing_utils, 'encode_pil_to_base64'):
         return f"data:image/png;base64,{img_str}"
     processing_utils.encode_pil_to_base64 = encode_pil_to_base64
 
+# Use local aliases to avoid AttributeError if patching fails or in different contexts
+_encode_pil_to_base64 = processing_utils.encode_pil_to_base64
+
 if not hasattr(processing_utils, 'decode_base64_to_image'):
     def decode_base64_to_image(encoding):
         content = encoding.split(";")[1]
@@ -37,10 +40,14 @@ if not hasattr(processing_utils, 'decode_base64_to_image'):
         return _Image.open(io.BytesIO(base64.b64decode(image_encoded)))
     processing_utils.decode_base64_to_image = decode_base64_to_image
 
+_decode_base64_to_image = processing_utils.decode_base64_to_image
+
 if not hasattr(processing_utils, 'resize_and_crop'):
     def resize_and_crop(img, size, crop_type='center'):
         return PIL.ImageOps.fit(img, size, centering=(0.5, 0.5) if crop_type == 'center' else (0, 0))
     processing_utils.resize_and_crop = resize_and_crop
+
+_resize_and_crop = processing_utils.resize_and_crop
 try:
     from gradio.components.base import Component as IOComponent, Block
 except ImportError:
@@ -334,14 +341,14 @@ class Image(
 
         assert isinstance(x, str)
         try:
-            im = processing_utils.decode_base64_to_image(x)
+            im = _decode_base64_to_image(x)
         except PIL.UnidentifiedImageError:
             raise Error("Unsupported image type in input")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             im = im.convert(self.image_mode)
         if self.shape is not None:
-            im = processing_utils.resize_and_crop(im, self.shape)
+            im = _resize_and_crop(im, self.shape)
         if self.invert_colors:
             im = PIL.ImageOps.invert(im)
         if (
@@ -353,7 +360,7 @@ class Image(
 
         if self.tool == "sketch" and self.source in ["upload", "webcam"]:
             if mask is not None:
-                mask_im = processing_utils.decode_base64_to_image(mask)
+                mask_im = _decode_base64_to_image(mask)
                 if mask_im.mode == "RGBA":  # whiten any opaque pixels in the mask
                     alpha_data = mask_im.getchannel("A").convert("L")
                     mask_im = _Image.merge("RGB", [alpha_data, alpha_data, alpha_data])
@@ -380,6 +387,11 @@ class Image(
         """
         if y is None:
             return None
+        
+        # If it's already a base64 string, return as is
+        if isinstance(y, str) and y.startswith("data:image/"):
+            return y
+
         if isinstance(y, np.ndarray):
             # Gradio v4 removed encode_array_to_base64, convert to PIL first
             from PIL import Image as PILImage
@@ -389,9 +401,9 @@ class Image(
                 # Normalize to 0-255 uint8
                 y_normalized = ((y - y.min()) / (y.max() - y.min()) * 255).astype(np.uint8)
                 pil_image = PILImage.fromarray(y_normalized)
-            return processing_utils.encode_pil_to_base64(pil_image)
+            return _encode_pil_to_base64(pil_image)
         elif isinstance(y, _Image.Image):
-            return processing_utils.encode_pil_to_base64(y)
+            return _encode_pil_to_base64(y)
         elif isinstance(y, (str, Path)):
             return client_utils.encode_url_or_file_to_base64(y)
         else:
@@ -412,9 +424,9 @@ class Image(
         Parameters:
             x: base64 representation of an image
         """
-        x = processing_utils.decode_base64_to_image(x)
+        x = _decode_base64_to_image(x)
         if self.shape is not None:
-            x = processing_utils.resize_and_crop(x, self.shape)
+            x = _resize_and_crop(x, self.shape)
         resized_and_cropped_image = np.array(x)
         try:
             from skimage.segmentation import slic
@@ -459,7 +471,7 @@ class Image(
             # Convert numpy array to PIL for encoding
             from PIL import Image as PILImage
             pil_img = PILImage.fromarray(image_screen.astype(np.uint8))
-            encoded = processing_utils.encode_pil_to_base64(pil_img)
+            encoded = _encode_pil_to_base64(pil_img)
             leave_one_out_tokens.append(encoded)
             token = np.copy(resized_and_cropped_image)
             token[segments_slic != segment_value] = 0
@@ -476,7 +488,7 @@ class Image(
             # Convert numpy array to PIL for encoding
             from PIL import Image as PILImage
             pil_img = PILImage.fromarray(masked_input.astype(np.uint8))
-            encoded = processing_utils.encode_pil_to_base64(pil_img)
+            encoded = _encode_pil_to_base64(pil_img)
             masked_inputs.append(encoded)
         return masked_inputs
 
@@ -487,9 +499,9 @@ class Image(
         Returns:
             A 2D array representing the interpretation score of each pixel of the image.
         """
-        x = processing_utils.decode_base64_to_image(x)
+        x = _decode_base64_to_image(x)
         if self.shape is not None:
-            x = processing_utils.resize_and_crop(x, self.shape)
+            x = _resize_and_crop(x, self.shape)
         x = np.array(x)
         output_scores = np.zeros((x.shape[0], x.shape[1]))
 
@@ -608,47 +620,70 @@ def patched_get_api_info(self):
     tries to parse complex component schemas with nested structures.
     """
     try:
-        result = gradio.Blocks.original_get_api_info(self)
-        return result
+        return gradio.Blocks.original_get_api_info(self)
     except (TypeError, AttributeError, KeyError, RecursionError) as e:
-        # Detailed error logging for debugging
         print(f"[Gradio Hijack] API info generation encountered {type(e).__name__}: {str(e)[:200]}")
-        print("[Gradio Hijack] Using simplified API info structure")
         
         # Build a minimal but functional API info manually
         try:
-            # Try to get basic endpoint info without full schema generation
             api_info = {
                 "named_endpoints": {},
                 "unnamed_endpoints": {}
             }
             
-            # Iterate through dependencies to build endpoint info
+            # Use fns if dependencies is missing (Gradio v4)
             deps = getattr(self, "dependencies", [])
             if not deps and hasattr(self, "fns"):
                 deps = self.fns
 
             for dep in deps:
+                # Extract api_name
                 api_name = None
                 if isinstance(dep, dict):
                     api_name = dep.get("api_name")
-                elif hasattr(dep, "api_name"):
-                    api_name = dep.api_name
+                else:
+                    api_name = getattr(dep, "api_name", None)
+
+                # Extract input/output components
+                inputs = []
+                if isinstance(dep, dict):
+                    inputs = dep.get("inputs", [])
+                else:
+                    inputs = getattr(dep, "inputs", [])
+                
+                outputs = []
+                if isinstance(dep, dict):
+                    outputs = dep.get("outputs", [])
+                else:
+                    outputs = getattr(dep, "outputs", [])
+
+                # Filter out State components from API schema
+                # In Gradio v4, States are handled internally and not part of the API payload
+                num_params = 0
+                for i in inputs:
+                    if not isinstance(i, gradio.State):
+                        num_params += 1
+                
+                num_returns = 0
+                for o in outputs:
+                    if not isinstance(o, gradio.State):
+                        num_returns += 1
+
+                endpoint_info = {
+                    "parameters": [{"label": f"input{i}", "type": "any", "python_type": "Any"} for i in range(num_params)],
+                    "returns": [{"label": f"output{i}", "type": "any", "python_type": "Any"} for i in range(num_returns)]
+                }
 
                 if api_name:
-                    endpoint_name = api_name
-                    api_info["named_endpoints"][f"/{endpoint_name}"] = {
-                        "parameters": [],
-                        "returns": []
-                    }
+                    api_info["named_endpoints"][f"/{api_name}"] = endpoint_info
+                else:
+                    # For unnamed endpoints, we use the index as a key (simplified)
+                    idx = deps.index(dep) if isinstance(deps, list) else 0
+                    api_info["unnamed_endpoints"][str(idx)] = endpoint_info
             
             return api_info
         except Exception as fallback_error:
             print(f"[Gradio Hijack] Fallback API generation also failed: {fallback_error}")
-            # Return absolute minimum structure
-            return {
-                "named_endpoints": {},
-                "unnamed_endpoints": {}
-            }
+            return {"named_endpoints": {}, "unnamed_endpoints": {}}
 
 gradio.Blocks.get_api_info = patched_get_api_info

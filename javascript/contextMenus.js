@@ -130,7 +130,7 @@ var appendContextMenuOption = initResponse[0];
 var removeContextMenuOption = initResponse[1];
 var addContextMenuEventListener = initResponse[2];
 
-let cancelGenerateForever = function() {
+var cancelGenerateForever = function() {
     clearInterval(window.generateOnRepeatInterval);
 };
 

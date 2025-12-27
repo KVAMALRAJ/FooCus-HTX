@@ -3,6 +3,7 @@ import random
 import os
 import json
 import time
+import PIL.Image
 import shared
 import modules.config
 import fooocus_version
@@ -177,7 +178,7 @@ for js_file in js_files:
     js_path = workspace_path / 'javascript' / js_file
     head_content += f'<script src="file={js_path}"></script>\n'
 css_path = workspace_path / 'css' / 'style.css'
-head_content += f'<link rel="stylesheet" href="file={css_path}>"'
+head_content += f'<link rel="stylesheet" href="file={css_path}">'
 
 shared.gradio_root = gr.Blocks(
     title=title,
