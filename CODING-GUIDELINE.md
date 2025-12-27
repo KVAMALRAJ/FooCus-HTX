@@ -19,3 +19,4 @@
   ```
 - **Gradio 4 Blocks API**: In Gradio 4, `Blocks.dependencies` has been replaced by `Blocks.fns`. When patching `get_api_info`, check for both attributes to maintain compatibility.
 - **Internal Utility Patches**: If relying on `gradio.processing_utils` methods that were removed in v4 (like `encode_pil_to_base64`, `decode_base64_to_image`, `resize_and_crop`), patch them back into the module if they are missing to minimize changes in the rest of the codebase.
+- **Gradio 4 Preprocessing**: In Gradio 4.x, the data passed to a component's `preprocess` method can be a dictionary (e.g., `{'path': '...', 'url': '...'}`) instead of a simple base64 string. Always handle both dictionary and string inputs in custom components to avoid `AssertionError` or `AttributeError`. Prefer using a robust loading helper that checks for `path`, `image`, and `url` keys.

@@ -322,7 +322,7 @@ class Image(
             )
 
     def preprocess(
-        self, x: str | dict[str, str]
+        self, x: str | dict[str, str] | None
     ) -> np.ndarray | _Image.Image | str | dict | None:
         """
         Parameters:
@@ -333,17 +333,36 @@ class Image(
         if x is None:
             return x
 
+        def load_any_image(val):
+            if val is None:
+                return None
+            try:
+                if isinstance(val, str):
+                    if val.startswith("data:image/"):
+                        return _decode_base64_to_image(val)
+                    else:
+                        return _Image.open(val)
+                elif isinstance(val, _Image.Image):
+                    return val
+                elif isinstance(val, np.ndarray):
+                    return _Image.fromarray(val)
+                else:
+                    return _Image.open(val)
+            except Exception:
+                return None
+
         mask = None
+        if isinstance(x, dict):
+            if self.tool == "sketch" and self.source in ["upload", "webcam"]:
+                mask = x.get("mask")
+                x = x.get("image")
+            else:
+                x = x.get("path") or x.get("image") or x.get("url")
 
-        if self.tool == "sketch" and self.source in ["upload", "webcam"]:
-            if isinstance(x, dict):
-                x, mask = x["image"], x["mask"]
-
-        assert isinstance(x, str)
-        try:
-            im = _decode_base64_to_image(x)
-        except PIL.UnidentifiedImageError:
+        im = load_any_image(x)
+        if im is None:
             raise Error("Unsupported image type in input")
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             im = im.convert(self.image_mode)
@@ -360,7 +379,10 @@ class Image(
 
         if self.tool == "sketch" and self.source in ["upload", "webcam"]:
             if mask is not None:
-                mask_im = _decode_base64_to_image(mask)
+                mask_im = load_any_image(mask)
+                if mask_im is None:
+                    raise Error("Unsupported mask type in input")
+
                 if mask_im.mode == "RGBA":  # whiten any opaque pixels in the mask
                     alpha_data = mask_im.getchannel("A").convert("L")
                     mask_im = _Image.merge("RGB", [alpha_data, alpha_data, alpha_data])

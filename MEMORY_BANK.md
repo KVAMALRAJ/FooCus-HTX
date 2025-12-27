@@ -15,6 +15,14 @@
   - **Decisions**: Use internal patches in `gradio_hijack.py` to ensure compatibility across Gradio versions without changing the main application logic.
   - **Next Goals**: Final verification and reporting to user.
 
+- **Session 2 (2025-12-27)**:
+  - **Focus**: Fixing AssertionError in image prompt and Advanced tab visibility.
+  - **Completed Tasks**:
+    - Fixed Developer Debug Mode visibility by relocating `dev_tools` to Advanced tab scope in `webui.py`.
+    - Resolved `AssertionError` in `modules/gradio_hijack.py` by making `preprocess` robust to Gradio 4.x dictionary inputs (handling paths, urls, and base64).
+  - **Decisions**: Adopted a robust image loading strategy in `gradio_hijack.py` to support diverse input formats from newer Gradio versions.
+  - **Next Goals**: Complete verification and summarize for user.
+
 ## Active Context
 - **Current Task**: Fixing `AttributeError: module 'gradio.processing_utils' has no attribute 'encode_pil_to_base64'`.
 - **Blockers**: None.
