@@ -10,7 +10,7 @@ import modules.inpaint_worker
 import extras.vae_interpose as vae_interpose
 from extras.expansion import FooocusExpansion
 from ldm_patched.modules.model_base import SDXL, SDXLRefiner
-from modules.util import get_enabled_loras, get_file_from_folder_list
+from modules.util import get_enabled_loras, get_file_from_folder_list, is_json
 from modules.sample_hijack import clip_separate
 
 
