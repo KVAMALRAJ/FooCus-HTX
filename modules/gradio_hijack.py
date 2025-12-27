@@ -495,11 +495,7 @@ class Image(
         Returns information about the expected input/output format for the API.
         """
         return {
-            "info": {
-                "type": "string",
-                "description": "base64 representation of an image"
-            },
-            "serialized_info": True
+            "type": "string",
         }
     
     def example_payload(self) -> Any:
