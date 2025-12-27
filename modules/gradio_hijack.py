@@ -557,3 +557,24 @@ def patched_wait_for(fut, timeout):
 
 gradio.routes.asyncio.wait_for = patched_wait_for
 
+
+# Monkey patch Gradio's Blocks.get_api_info to prevent schema parsing errors
+import gradio
+
+if not hasattr(gradio.Blocks, 'original_get_api_info'):
+    gradio.Blocks.original_get_api_info = gradio.Blocks.get_api_info
+
+def patched_get_api_info(self):
+    """
+    Patched version that catches and suppresses API info generation errors.
+    This prevents TypeError from breaking the application when Gradio v4
+    tries to parse complex component schemas.
+    """
+    try:
+        return gradio.Blocks.original_get_api_info(self)
+    except (TypeError, AttributeError, KeyError) as e:
+        # Return minimal API info structure if generation fails
+        print(f"[Gradio Hijack] Suppressed API info generation error: {type(e).__name__}")
+        return {}
+
+gradio.Blocks.get_api_info = patched_get_api_info
