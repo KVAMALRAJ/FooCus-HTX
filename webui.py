@@ -85,6 +85,10 @@ def generate_clicked(task: worker.AsyncTask):
                 if not args_manager.args.disable_enhance_output_sorting:
                     product = sort_enhance_images(product, task)
                 
+                # Sort finished images backwards (last generated on top)
+                if isinstance(product, list):
+                    product = product[::-1]
+
                 # Get expanded prompts if available (with safe check)
                 expanded_text = ''
                 accordion_visible = False
@@ -250,7 +254,7 @@ with shared.gradio_root:
                 input_image_checkbox = gr.Checkbox(label='Input Image', value=modules.config.default_image_prompt_checkbox, container=False, elem_classes='min_check')
                 enhance_checkbox = gr.Checkbox(label='Enhance', value=modules.config.default_enhance_checkbox, container=False, elem_classes='min_check')
                 advanced_checkbox = gr.Checkbox(label='Advanced', value=modules.config.default_advanced_checkbox, container=False, elem_classes='min_check')
-            with gr.Row(visible=modules.config.default_image_prompt_checkbox) as image_input_panel:
+            with gr.Column(visible=modules.config.default_image_prompt_checkbox) as image_input_panel:
                 with gr.Tabs(selected=modules.config.default_selected_image_input_tab_id):
                     with gr.Tab(label='Upscale or Variation', id='uov_tab') as uov_tab:
                         with gr.Row():
@@ -427,7 +431,7 @@ with shared.gradio_root:
                         metadata_input_image.change(trigger_metadata_preview, inputs=metadata_input_image,
                                                     outputs=metadata_json, queue=False, show_progress=True)
 
-            with gr.Row(visible=modules.config.default_enhance_checkbox) as enhance_input_panel:
+            with gr.Column(visible=modules.config.default_enhance_checkbox) as enhance_input_panel:
                 with gr.Tabs():
                     with gr.Tab(label='Upscale or Variation'):
                         with gr.Row():
@@ -585,8 +589,8 @@ with shared.gradio_root:
                                      example_enhance_mask_dino_prompt_text],
                             queue=False, show_progress=False)
 
-            switch_js = "(x) => {if(x){viewer_to_bottom(100);viewer_to_bottom(500);}else{viewer_to_top();} return x;}"
-            down_js = "() => {viewer_to_bottom();}"
+            switch_js = "(x) => { try { if(x){ if(typeof viewer_to_bottom === 'function') { viewer_to_bottom(100); viewer_to_bottom(500); } } else { if(typeof viewer_to_top === 'function') { viewer_to_top(); } } } catch(e) { console.error('Switch JS Error:', e); } return x; }"
+            down_js = "() => { try { if(typeof viewer_to_bottom === 'function') { viewer_to_bottom(); } } catch(e) { console.error('Down JS Error:', e); } }"
 
             input_image_checkbox.change(lambda x: gr.update(visible=x), inputs=input_image_checkbox,
                                         outputs=image_input_panel, queue=False, show_progress=False, js=switch_js)

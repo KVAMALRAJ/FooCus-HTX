@@ -273,5 +273,24 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     document.body.appendChild(modal);
+    
+    // Global keydown listener to ensure arrow keys work even if modal elements lose focus
+    document.addEventListener('keydown', (e) => {
+        const lb = document.getElementById("lightboxModal");
+        if (lb && lb.style.display !== 'none') {
+            // If the user is typing in an input or textarea, don't trigger lightbox shortcuts
+            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                return;
+            }
+            
+            if (e.key === 'ArrowRight') {
+                modalNextImage(e);
+            } else if (e.key === 'ArrowLeft') {
+                modalPrevImage(e);
+            } else if (e.key === 'Escape') {
+                closeModal();
+            }
+        }
+    });
 
 });
