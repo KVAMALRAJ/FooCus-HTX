@@ -18,18 +18,34 @@ from gradio_client.serializing import ImgSerializable
 from PIL import Image as _Image  # using _ to minimize namespace pollution
 
 from gradio import processing_utils, utils, Error
-from gradio.components.base import IOComponent, _Keywords, Block
-from gradio.deprecation import warn_style_method_deprecation
-from gradio.events import (
-    Changeable,
-    Clearable,
-    Editable,
-    EventListenerMethod,
-    Selectable,
-    Streamable,
-    Uploadable,
-)
-from gradio.interpretation import TokenInterpretable
+try:
+    from gradio.components.base import Component as IOComponent, Block
+except ImportError:
+    from gradio.components.base import IOComponent, Block
+
+try:
+    from gradio.deprecation import warn_style_method_deprecation
+except ImportError:
+    warn_style_method_deprecation = None
+
+try:
+    from gradio.events import (
+        Changeable,
+        Clearable,
+        Editable,
+        EventListenerMethod,
+        Selectable,
+        Streamable,
+        Uploadable,
+    )
+except ImportError:
+    from gradio.events import Events
+    Changeable = Clearable = Editable = Selectable = Streamable = Uploadable = Events
+
+try:
+    from gradio.interpretation import TokenInterpretable
+except ImportError:
+    TokenInterpretable = object
 
 set_documentation_group("component")
 _Image.init()  # fixes https://github.com/gradio-app/gradio/issues/2843
@@ -37,15 +53,8 @@ _Image.init()  # fixes https://github.com/gradio-app/gradio/issues/2843
 
 @document()
 class Image(
-    Editable,
-    Clearable,
-    Changeable,
-    Streamable,
-    Selectable,
-    Uploadable,
     IOComponent,
     ImgSerializable,
-    TokenInterpretable,
 ):
     """
     Creates an image component that can be used to upload/draw images (as an input) or display images (as an output).
@@ -173,10 +182,11 @@ class Image(
             value=value,
             **kwargs,
         )
-        TokenInterpretable.__init__(self)
+        if TokenInterpretable != object:
+            TokenInterpretable.__init__(self)
 
     def get_config(self):
-        return {
+        config = {
             "image_mode": self.image_mode,
             "shape": self.shape,
             "height": self.height,
@@ -189,15 +199,17 @@ class Image(
             "brush_radius": self.brush_radius,
             "brush_color": self.brush_color,
             "mask_opacity": self.mask_opacity,
-            "selectable": self.selectable,
             "show_share_button": self.show_share_button,
             "show_download_button": self.show_download_button,
-            **IOComponent.get_config(self),
         }
+        if hasattr(self, 'selectable'):
+            config["selectable"] = self.selectable
+        config.update(IOComponent.get_config(self))
+        return config
 
     @staticmethod
     def update(
-        value: Any | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
+        value: Any | None = None,
         height: int | None = None,
         width: int | None = None,
         label: str | None = None,
@@ -213,24 +225,38 @@ class Image(
         mask_opacity: float | None = None,
         show_share_button: bool | None = None,
     ):
-        return {
-            "height": height,
-            "width": width,
-            "label": label,
-            "show_label": show_label,
-            "show_download_button": show_download_button,
-            "container": container,
-            "scale": scale,
-            "min_width": min_width,
-            "interactive": interactive,
-            "visible": visible,
-            "value": value,
-            "brush_radius": brush_radius,
-            "brush_color": brush_color,
-            "mask_opacity": mask_opacity,
-            "show_share_button": show_share_button,
-            "__type__": "update",
-        }
+        updates = {}
+        if height is not None:
+            updates["height"] = height
+        if width is not None:
+            updates["width"] = width
+        if label is not None:
+            updates["label"] = label
+        if show_label is not None:
+            updates["show_label"] = show_label
+        if show_download_button is not None:
+            updates["show_download_button"] = show_download_button
+        if container is not None:
+            updates["container"] = container
+        if scale is not None:
+            updates["scale"] = scale
+        if min_width is not None:
+            updates["min_width"] = min_width
+        if interactive is not None:
+            updates["interactive"] = interactive
+        if visible is not None:
+            updates["visible"] = visible
+        if value is not None:
+            updates["value"] = value
+        if brush_radius is not None:
+            updates["brush_radius"] = brush_radius
+        if brush_color is not None:
+            updates["brush_color"] = brush_color
+        if mask_opacity is not None:
+            updates["mask_opacity"] = mask_opacity
+        if show_share_button is not None:
+            updates["show_share_button"] = show_share_button
+        return updates
 
     def _format_image(
         self, im: _Image.Image | None
@@ -433,7 +459,8 @@ class Image(
         """
         This method is deprecated. Please set these arguments in the constructor instead.
         """
-        warn_style_method_deprecation()
+        if warn_style_method_deprecation:
+            warn_style_method_deprecation()
         if height is not None:
             self.height = height
         if width is not None:
