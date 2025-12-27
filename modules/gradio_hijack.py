@@ -496,6 +496,7 @@ class Image(
         """
         return {
             "type": "string",
+            "description": "base64 representation of an image"
         }
     
     def example_payload(self) -> Any:
@@ -511,6 +512,22 @@ class Image(
         Returns an example input value.
         """
         return "https://raw.githubusercontent.com/gradio-app/gradio/main/test/test_files/bus.png"
+    
+    def input_api_info(self) -> dict[str, Any]:
+        """
+        Gradio v4 requires this method for input API schema.
+        """
+        return {
+            "type": "string"
+        }
+    
+    def output_api_info(self) -> dict[str, Any]:
+        """
+        Gradio v4 requires this method for output API schema.
+        """
+        return {
+            "type": "string"
+        }
 
 
 all_components = []
