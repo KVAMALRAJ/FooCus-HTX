@@ -376,7 +376,7 @@ with shared.gradio_root:
                                     value = modules.util.get_image_size_info(image, modules.flags.sdxl_aspect_ratios)
                                     return gr.update(value=value, visible=True)
 
-                                describe_input_image.upload(trigger_show_image_properties, inputs=describe_input_image,
+                                describe_input_image.change(trigger_show_image_properties, inputs=describe_input_image,
                                                             outputs=describe_image_size, show_progress=False, queue=False)
 
                     with gr.Tab(label='Enhance', id='enhance_tab') as enhance_tab:
@@ -403,7 +403,7 @@ with shared.gradio_root:
 
                             return results
 
-                        metadata_input_image.upload(trigger_metadata_preview, inputs=metadata_input_image,
+                        metadata_input_image.change(trigger_metadata_preview, inputs=metadata_input_image,
                                                     outputs=metadata_json, queue=False, show_progress=True)
 
             with gr.Row(visible=modules.config.default_enhance_checkbox) as enhance_input_panel:
@@ -1382,12 +1382,12 @@ Output: "a highly detailed cat, professional photography, natural lighting, deta
                     return trigger_describe(mode, img, apply_styles)
                 return gr.update(), gr.update()
 
-            uov_input_image.upload(trigger_auto_describe, inputs=[describe_methods, uov_input_image, prompt, describe_apply_styles],
+            uov_input_image.change(trigger_auto_describe, inputs=[describe_methods, uov_input_image, prompt, describe_apply_styles],
                                    outputs=[prompt, style_selections], show_progress=True, queue=True) \
                 .then(fn=style_sorter.sort_styles, inputs=style_selections, outputs=style_selections, queue=False, show_progress=False) \
                 .then(lambda: None, js='()=>{refresh_style_localization();}')
 
-            enhance_input_image.upload(lambda: gr.update(value=True), outputs=enhance_checkbox, queue=False, show_progress=False) \
+            enhance_input_image.change(lambda: gr.update(value=True), outputs=enhance_checkbox, queue=False, show_progress=False) \
                 .then(trigger_auto_describe, inputs=[describe_methods, enhance_input_image, prompt, describe_apply_styles],
                       outputs=[prompt, style_selections], show_progress=True, queue=True) \
                 .then(fn=style_sorter.sort_styles, inputs=style_selections, outputs=style_selections, queue=False, show_progress=False) \
