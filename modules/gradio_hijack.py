@@ -357,7 +357,7 @@ class Image(
                 mask = x.get("mask")
                 x = x.get("image")
             else:
-                x = x.get("path") or x.get("image") or x.get("url")
+                x = x.get("path") or x.get("image") or x.get("url") or x
 
         im = load_any_image(x)
         if im is None:
@@ -681,11 +681,17 @@ def patched_get_api_info(self):
                 else:
                     inputs = getattr(dep, "inputs", [])
                 
+                if not isinstance(inputs, (list, tuple)):
+                    inputs = []
+                
                 outputs = []
                 if isinstance(dep, dict):
                     outputs = dep.get("outputs", [])
                 else:
                     outputs = getattr(dep, "outputs", [])
+                
+                if not isinstance(outputs, (list, tuple)):
+                    outputs = []
 
                 # Filter out State components from API schema
                 # In Gradio v4, States are handled internally and not part of the API payload

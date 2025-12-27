@@ -9,6 +9,7 @@ import ldm_patched.modules.latent_formats
 import modules.inpaint_worker
 import extras.vae_interpose as vae_interpose
 from extras.expansion import FooocusExpansion
+from modules.util import get_enabled_loras
 
 
 model_base = core.StableDiffusionModel()
