@@ -9,7 +9,9 @@ import ldm_patched.modules.latent_formats
 import modules.inpaint_worker
 import extras.vae_interpose as vae_interpose
 from extras.expansion import FooocusExpansion
-from modules.util import get_enabled_loras
+from ldm_patched.modules.model_base import SDXL, SDXLRefiner
+from modules.util import get_enabled_loras, get_file_from_folder_list
+from modules.sample_hijack import clip_separate
 
 
 model_base = core.StableDiffusionModel()
