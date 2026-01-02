@@ -345,19 +345,19 @@ default_max_lora_number = get_config_item_or_set_default(
 )
 default_cfg_scale = get_config_item_or_set_default(
     key='default_cfg_scale',
-    default_value=7.5,
+    default_value=7.0,
     validator=lambda x: isinstance(x, numbers.Number),
     expected_type=numbers.Number
 )
 default_sample_sharpness = get_config_item_or_set_default(
     key='default_sample_sharpness',
-    default_value=3.0,
+    default_value=2.0,
     validator=lambda x: isinstance(x, numbers.Number),
     expected_type=numbers.Number
 )
 default_sampler = get_config_item_or_set_default(
     key='default_sampler',
-    default_value='dpmpp_3m_sde_gpu',
+    default_value='dpmpp_2m_sde_gpu',
     validator=lambda x: x in modules.flags.sampler_list,
     expected_type=str
 )
@@ -564,7 +564,7 @@ default_inpaint_method = get_config_item_or_set_default(
 )
 default_cfg_tsnr = get_config_item_or_set_default(
     key='default_cfg_tsnr',
-    default_value=7.5,
+    default_value=7.0,
     validator=lambda x: isinstance(x, numbers.Number),
     expected_type=numbers.Number
 )
@@ -751,7 +751,7 @@ civitai_api_key = get_config_item_or_set_default(
 
 default_inpaint_mask_sam_model = get_config_item_or_set_default(
     key='default_inpaint_mask_sam_model',
-    default_value='vit_h',
+    default_value='vit_b',
     validator=lambda x: x in modules.flags.inpaint_mask_sam_model,
     expected_type=str
 )
@@ -959,11 +959,11 @@ def downloading_ip_adapters(v):
     results = []
 
     load_file_from_url(
-        url='https://huggingface.co/lllyasviel/misc/resolve/main/clip_vision_vit_h.safetensors',
+        url='https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/image_encoder/model.safetensors',
         model_dir=path_clip_vision,
-        file_name='clip_vision_vit_h.safetensors'
+        file_name='clip_vision_vit_bigg.safetensors'
     )
-    results += [os.path.join(path_clip_vision, 'clip_vision_vit_h.safetensors')]
+    results += [os.path.join(path_clip_vision, 'clip_vision_vit_bigg.safetensors')]
 
     load_file_from_url(
         url='https://huggingface.co/lllyasviel/misc/resolve/main/fooocus_ip_negative.safetensors',
