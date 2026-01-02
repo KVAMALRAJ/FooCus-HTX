@@ -359,9 +359,13 @@ class Image(
             else:
                 x = x.get("path") or x.get("image") or x.get("url") or x
 
+        # Return None early if no image provided
+        if x is None:
+            return None
+
         im = load_any_image(x)
         if im is None:
-            raise Error("Unsupported image type in input")
+            return None  # Changed from raising error to returning None
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
