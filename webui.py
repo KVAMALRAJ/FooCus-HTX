@@ -85,7 +85,7 @@ def generate_clicked(task: worker.AsyncTask):
                 # Get expanded prompts if available
                 expanded_text = ''
                 accordion_visible = False
-                if len(task.expanded_prompts) > 0:
+                if hasattr(task, 'expanded_prompts') and len(task.expanded_prompts) > 0:
                     expanded_text = '\n\n'.join([f'Prompt {i+1}:\n{p}' for i, p in enumerate(task.expanded_prompts)])
                     accordion_visible = True
 
