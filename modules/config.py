@@ -959,11 +959,11 @@ def downloading_ip_adapters(v):
     results = []
 
     load_file_from_url(
-        url='https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/image_encoder/model.safetensors',
+        url='https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors',
         model_dir=path_clip_vision,
-        file_name='clip_vision_vit_bigg.safetensors'
+        file_name='clip_vision_vit_h.safetensors'
     )
-    results += [os.path.join(path_clip_vision, 'clip_vision_vit_bigg.safetensors')]
+    results += [os.path.join(path_clip_vision, 'clip_vision_vit_h.safetensors')]
 
     load_file_from_url(
         url='https://huggingface.co/lllyasviel/misc/resolve/main/fooocus_ip_negative.safetensors',
