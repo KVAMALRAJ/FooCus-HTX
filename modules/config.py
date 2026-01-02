@@ -345,19 +345,19 @@ default_max_lora_number = get_config_item_or_set_default(
 )
 default_cfg_scale = get_config_item_or_set_default(
     key='default_cfg_scale',
-    default_value=7.0,
+    default_value=7.5,
     validator=lambda x: isinstance(x, numbers.Number),
     expected_type=numbers.Number
 )
 default_sample_sharpness = get_config_item_or_set_default(
     key='default_sample_sharpness',
-    default_value=2.0,
+    default_value=3.0,
     validator=lambda x: isinstance(x, numbers.Number),
     expected_type=numbers.Number
 )
 default_sampler = get_config_item_or_set_default(
     key='default_sampler',
-    default_value='dpmpp_2m_sde_gpu',
+    default_value='dpmpp_3m_sde_gpu',
     validator=lambda x: x in modules.flags.sampler_list,
     expected_type=str
 )
@@ -564,7 +564,7 @@ default_inpaint_method = get_config_item_or_set_default(
 )
 default_cfg_tsnr = get_config_item_or_set_default(
     key='default_cfg_tsnr',
-    default_value=7.0,
+    default_value=7.5,
     validator=lambda x: isinstance(x, numbers.Number),
     expected_type=numbers.Number
 )
@@ -699,6 +699,47 @@ default_inpaint_mask_cloth_category = get_config_item_or_set_default(
     expected_type=str
 )
 
+# External LLM Expansion Configuration
+default_use_external_llm_expansion = get_config_item_or_set_default(
+    key='default_use_external_llm_expansion',
+    default_value=False,
+    validator=lambda x: isinstance(x, bool),
+    expected_type=bool
+)
+deepseek_api_key = get_config_item_or_set_default(
+    key='deepseek_api_key',
+    default_value='',
+    validator=lambda x: isinstance(x, str),
+    disable_empty_as_none=True,
+    expected_type=str
+)
+deepseek_api_base = get_config_item_or_set_default(
+    key='deepseek_api_base',
+    default_value='https://api.deepseek.com',
+    validator=lambda x: isinstance(x, str),
+    expected_type=str
+)
+deepseek_system_prompt = get_config_item_or_set_default(
+    key='deepseek_system_prompt',
+    default_value='''You are an expert at expanding stable diffusion prompts. 
+Your task is to take a short image generation prompt and expand it into a detailed, high-quality prompt that will generate better images.
+
+Guidelines:
+- Add artistic and technical details (lighting, composition, style, mood)
+- Include quality enhancers (highly detailed, masterpiece, best quality, 8k, etc.)
+- Maintain the core concept of the original prompt
+- Keep it concise but descriptive (aim for 50-100 words)
+- Use comma-separated descriptive phrases
+- Do NOT add any explanations or commentary, ONLY return the expanded prompt
+- Focus on visual details that improve image quality
+
+Example:
+Input: "a cat"
+Output: "a highly detailed cat, professional photography, natural lighting, detailed fur texture, sharp focus, high resolution, photorealistic, masterpiece quality, sitting pose, warm colors, soft bokeh background"''',
+    validator=lambda x: isinstance(x, str),
+    expected_type=str
+)
+
 # CivitAI Configuration
 civitai_api_key = get_config_item_or_set_default(
     key='civitai_api_key',
@@ -710,7 +751,7 @@ civitai_api_key = get_config_item_or_set_default(
 
 default_inpaint_mask_sam_model = get_config_item_or_set_default(
     key='default_inpaint_mask_sam_model',
-    default_value='vit_b',
+    default_value='vit_h',
     validator=lambda x: x in modules.flags.inpaint_mask_sam_model,
     expected_type=str
 )
