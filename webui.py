@@ -670,8 +670,17 @@ with shared.gradio_root:
                         return gr.update(value='')
 
                     html_path = get_current_html_path(output_format)
-                    # Use relative path for better compatibility with Gradio file serving
-                    return gr.update(value=f'<a href="/file={html_path}" target="_blank">\U0001F4DA History Log</a>')
+                    try:
+                        # Read and display the history file content directly
+                        if os.path.exists(html_path):
+                            with open(html_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                            # Wrap in iframe for better display
+                            return gr.update(value=f'<details><summary>\U0001F4DA View History Log (Click to expand)</summary><div style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-top: 10px;">{content}</div></details>')
+                        else:
+                            return gr.update(value='<p>\U0001F4DA No history yet. Generate images to see history.</p>')
+                    except Exception as e:
+                        return gr.update(value=f'<p>\U0001F4DA History log: {html_path}</p>')
 
                 history_link = gr.HTML()
                 shared.gradio_root.load(update_history_link, outputs=history_link, queue=False, show_progress=False)
