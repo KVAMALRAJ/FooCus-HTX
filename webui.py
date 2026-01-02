@@ -184,8 +184,15 @@ with shared.gradio_root:
                                  elem_id='final_gallery')
             with gr.Row():
                 with gr.Column(scale=17):
-                    prompt = gr.Textbox(show_label=False, placeholder="Type prompt here or paste parameters.", elem_id='positive_prompt',
-                                        autofocus=True, lines=3)
+                    prompt = gr.Textbox(
+                        show_label=False, 
+                        placeholder="Type prompt here or paste parameters. Use Shift+Enter for new line.", 
+                        elem_id='positive_prompt',
+                        autofocus=True, 
+                        lines=3,
+                        max_lines=10,
+                        info="💡 Tip: You can use multiple lines. Each line will be processed separately."
+                    )
 
                     default_prompt = modules.config.default_prompt
                     if isinstance(default_prompt, str) and default_prompt != '':
@@ -197,7 +204,8 @@ with shared.gradio_root:
                             label='This is the expanded prompt that was actually used for generation',
                             interactive=False,
                             lines=5,
-                            show_label=True
+                            show_label=True,
+                            max_lines=20
                         )
 
                 with gr.Column(scale=3, min_width=0):
@@ -626,10 +634,16 @@ with shared.gradio_root:
                                          choices=flags.OutputFormat.list(),
                                          value=modules.config.default_output_format)
 
-                negative_prompt = gr.Textbox(label='Negative Prompt', show_label=True, placeholder="Type prompt here.",
-                                             info='Describing what you do not want to see.', lines=2,
-                                             elem_id='negative_prompt',
-                                             value=modules.config.default_prompt_negative)
+                negative_prompt = gr.Textbox(
+                    label='Negative Prompt', 
+                    show_label=True, 
+                    placeholder="Type negative prompt here. Use Shift+Enter for new line.",
+                    info='💡 Describing what you do not want to see. Multiple lines supported.', 
+                    lines=2,
+                    max_lines=8,
+                    elem_id='negative_prompt',
+                    value=modules.config.default_prompt_negative
+                )
                 seed_random = gr.Checkbox(label='Random', value=True)
                 image_seed = gr.Textbox(label='Seed', value=0, max_lines=1, visible=False) # workaround for https://github.com/gradio-app/gradio/issues/5354
 
