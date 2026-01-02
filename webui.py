@@ -24,71 +24,11 @@ from modules.ui_gradio_extensions import reload_javascript
 from modules.auth import auth_enabled, check_auth
 from modules.util import is_json
 
-def process_image_editor_input(img_data):
-    """Process ImageEditor component output for compatibility with inpaint processing.
-    
-    ImageEditor returns a dict with:
-    - 'background': the base image
-    - 'layers': list of layers (we use layers[0] for mask if available)
-    - 'composite': the final composited image
-    
-    We need to convert this to the format expected by async_worker:
-    - dict with 'image' and 'mask' keys
-    """
-    if img_data is None:
-        return None
-    
-    # If it's already in the old format or a simple numpy array, return as-is
-    if isinstance(img_data, dict):
-        if 'image' in img_data and 'mask' in img_data:
-            return img_data
-        
-        # Process new ImageEditor format
-        if 'background' in img_data:
-            import numpy as np
-            
-            background = img_data.get('background', None)
-            layers = img_data.get('layers', [])
-            composite = img_data.get('composite', None)
-            
-            # Use composite as the image if available, otherwise background
-            image = composite if composite is not None else background
-            
-            # Extract mask from layers
-            if len(layers) > 0 and isinstance(layers[0], np.ndarray):
-                # The first layer is typically the drawn mask
-                mask = layers[0]
-                # Ensure mask is 3-channel for compatibility
-                if mask.ndim == 2:
-                    mask = np.stack([mask, mask, mask], axis=2)
-            else:
-                # No mask drawn, create empty mask
-                if isinstance(image, np.ndarray):
-                    mask = np.zeros_like(image)
-                else:
-                    mask = np.zeros((512, 512, 3), dtype=np.uint8)
-            
-            return {'image': image, 'mask': mask}
-    
-    return img_data
-
 def get_task(*args):
     args = list(args)
     args.pop(0)
-    
-    # Process ImageEditor inputs for inpaint_input_image and inpaint_mask_image
-    # These are at specific positions in the args list
-    # Based on the ctrls list structure, we need to find and process them
-    # inpaint_input_image is typically around position 26-30 depending on configuration
-    # Let's process them by checking if they're dicts with ImageEditor format
-    processed_args = []
-    for arg in args:
-        if isinstance(arg, dict) and 'background' in arg:
-            processed_args.append(process_image_editor_input(arg))
-        else:
-            processed_args.append(arg)
-    
-    return worker.AsyncTask(args=processed_args)
+
+    return worker.AsyncTask(args=args)
 
 def generate_clicked(task: worker.AsyncTask):
     import ldm_patched.modules.model_management as model_management
@@ -261,11 +201,11 @@ with shared.gradio_root:
                         )
 
                 with gr.Column(scale=3, min_width=0):
-                    generate_button = gr.Button(label="Generate", value="Generate", elem_classes='type_row', elem_id='generate_button', visible=True)
-                    reset_button = gr.Button(label="Reconnect", value="Reconnect", elem_classes='type_row', elem_id='reset_button', visible=False)
-                    load_parameter_button = gr.Button(label="Load Parameters", value="Load Parameters", elem_classes='type_row', elem_id='load_parameter_button', visible=False)
-                    skip_button = gr.Button(label="Skip", value="Skip", elem_classes='type_row_half', elem_id='skip_button', visible=False)
-                    stop_button = gr.Button(label="Stop", value="Stop", elem_classes='type_row_half', elem_id='stop_button', visible=False)
+                    generate_button = gr.Button(value="Generate", elem_classes='type_row', elem_id='generate_button', visible=True)
+                    reset_button = gr.Button(value="Reconnect", elem_classes='type_row', elem_id='reset_button', visible=False)
+                    load_parameter_button = gr.Button(value="Load Parameters", elem_classes='type_row', elem_id='load_parameter_button', visible=False)
+                    skip_button = gr.Button(value="Skip", elem_classes='type_row_half', elem_id='skip_button', visible=False)
+                    stop_button = gr.Button(value="Stop", elem_classes='type_row_half', elem_id='stop_button', visible=False)
 
                     def stop_clicked(currentTask):
                         import ldm_patched.modules.model_management as model_management
@@ -342,15 +282,15 @@ with shared.gradio_root:
                     with gr.Tab(label='Inpaint or Outpaint', id='inpaint_tab') as inpaint_tab:
                         with gr.Row():
                             with gr.Column():
-                                inpaint_input_image = gr.ImageEditor(
+                                inpaint_input_image = grh.Image(
                                     label='Image',
+                                    source='upload',
                                     type='numpy',
+                                    tool='sketch',
                                     height=500,
-                                    brush=gr.Brush(colors=["#FFFFFF"], default_size=20),
+                                    brush_color="#FFFFFF",
                                     elem_id='inpaint_canvas',
-                                    show_label=False,
-                                    layers=False,
-                                    sources=['upload', 'webcam', 'clipboard']
+                                    show_label=False
                                 )
                                 inpaint_advanced_masking_checkbox = gr.Checkbox(label='Enable Advanced Masking Features', value=modules.config.default_inpaint_advanced_masking_checkbox)
                                 inpaint_mode = gr.Dropdown(choices=modules.flags.inpaint_options, value=modules.config.default_inpaint_method, label='Method')
@@ -364,14 +304,15 @@ with shared.gradio_root:
                                 example_inpaint_prompts.click(lambda x: x[0], inputs=example_inpaint_prompts, outputs=inpaint_additional_prompt, show_progress=False, queue=False)
 
                             with gr.Column(visible=modules.config.default_inpaint_advanced_masking_checkbox) as inpaint_mask_generation_col:
-                                inpaint_mask_image = gr.ImageEditor(
+                                inpaint_mask_image = grh.Image(
                                     label='Mask Upload',
+                                    source='upload',
                                     type='numpy',
+                                    tool='sketch',
                                     height=500,
-                                    brush=gr.Brush(colors=["#FFFFFF"], default_size=20),
-                                    elem_id='inpaint_mask_canvas',
-                                    layers=False,
-                                    sources=['upload', 'clipboard']
+                                    brush_color="#FFFFFF",
+                                    mask_opacity=1,
+                                    elem_id='inpaint_mask_canvas'
                                 )
                                 invert_mask_checkbox = gr.Checkbox(label='Invert Mask When Generating', value=modules.config.default_invert_mask_checkbox)
                                 inpaint_mask_model = gr.Dropdown(label='Mask generation model',
@@ -785,7 +726,7 @@ with shared.gradio_root:
                             lora_ctrls += [lora_enabled, lora_model, lora_weight]
 
                 with gr.Row():
-                    refresh_files = gr.Button(label='Refresh', value='\U0001f504 Refresh All Files', variant='secondary', elem_classes='refresh_button')
+                    refresh_files = gr.Button(value='\U0001f504 Refresh All Files', variant='secondary', elem_classes='refresh_button')
             with gr.Tab(label='Advanced'):
                 guidance_scale = gr.Slider(label='Guidance Scale', minimum=1.0, maximum=30.0, step=0.01,
                                            value=modules.config.default_cfg_scale,
@@ -1195,7 +1136,7 @@ Output: "a highly detailed cat, professional photography, natural lighting, deta
                                                               'negative value will make white area smaller. '
                                                               '(default is 0, processed before SAM)')
 
-                    inpaint_mask_color = gr.ColorPicker(label='Inpaint brush color', value='#FFFFFF', elem_id='inpaint_brush_color', visible=False, info='Brush color is fixed to white for better mask visibility')
+                    inpaint_mask_color = gr.ColorPicker(label='Inpaint brush color', value='#FFFFFF', elem_id='inpaint_brush_color')
 
                     inpaint_ctrls = [debugging_inpaint_preprocessor, inpaint_disable_initial_latent, inpaint_engine,
                                          inpaint_strength, inpaint_respective_field,
@@ -1205,6 +1146,10 @@ Output: "a highly detailed cat, professional photography, natural lighting, deta
                                                                  inputs=inpaint_advanced_masking_checkbox,
                                                                  outputs=[inpaint_mask_image, inpaint_mask_generation_col],
                                                                  queue=False, show_progress=False)
+
+                    inpaint_mask_color.change(lambda x: [gr.update(brush_color=x)] * 2, inputs=inpaint_mask_color,
+                                                  outputs=[inpaint_input_image, inpaint_mask_image],
+                                                  queue=False, show_progress=False)
 
                 with gr.Tab(label='FreeU'):
                     freeu_enabled = gr.Checkbox(label='Enabled', value=False)
