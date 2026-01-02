@@ -3,7 +3,6 @@ import random
 import os
 import json
 import time
-import PIL.Image
 import shared
 import modules.config
 import fooocus_version
@@ -25,11 +24,71 @@ from modules.ui_gradio_extensions import reload_javascript
 from modules.auth import auth_enabled, check_auth
 from modules.util import is_json
 
+def process_image_editor_input(img_data):
+    """Process ImageEditor component output for compatibility with inpaint processing.
+    
+    ImageEditor returns a dict with:
+    - 'background': the base image
+    - 'layers': list of layers (we use layers[0] for mask if available)
+    - 'composite': the final composited image
+    
+    We need to convert this to the format expected by async_worker:
+    - dict with 'image' and 'mask' keys
+    """
+    if img_data is None:
+        return None
+    
+    # If it's already in the old format or a simple numpy array, return as-is
+    if isinstance(img_data, dict):
+        if 'image' in img_data and 'mask' in img_data:
+            return img_data
+        
+        # Process new ImageEditor format
+        if 'background' in img_data:
+            import numpy as np
+            
+            background = img_data.get('background', None)
+            layers = img_data.get('layers', [])
+            composite = img_data.get('composite', None)
+            
+            # Use composite as the image if available, otherwise background
+            image = composite if composite is not None else background
+            
+            # Extract mask from layers
+            if len(layers) > 0 and isinstance(layers[0], np.ndarray):
+                # The first layer is typically the drawn mask
+                mask = layers[0]
+                # Ensure mask is 3-channel for compatibility
+                if mask.ndim == 2:
+                    mask = np.stack([mask, mask, mask], axis=2)
+            else:
+                # No mask drawn, create empty mask
+                if isinstance(image, np.ndarray):
+                    mask = np.zeros_like(image)
+                else:
+                    mask = np.zeros((512, 512, 3), dtype=np.uint8)
+            
+            return {'image': image, 'mask': mask}
+    
+    return img_data
+
 def get_task(*args):
     args = list(args)
     args.pop(0)
-
-    return worker.AsyncTask(args=args)
+    
+    # Process ImageEditor inputs for inpaint_input_image and inpaint_mask_image
+    # These are at specific positions in the args list
+    # Based on the ctrls list structure, we need to find and process them
+    # inpaint_input_image is typically around position 26-30 depending on configuration
+    # Let's process them by checking if they're dicts with ImageEditor format
+    processed_args = []
+    for arg in args:
+        if isinstance(arg, dict) and 'background' in arg:
+            processed_args.append(process_image_editor_input(arg))
+        else:
+            processed_args.append(arg)
+    
+    return worker.AsyncTask(args=processed_args)
 
 def generate_clicked(task: worker.AsyncTask):
     import ldm_patched.modules.model_management as model_management
@@ -39,91 +98,70 @@ def generate_clicked(task: worker.AsyncTask):
     # outputs=[progress_html, progress_window, progress_gallery, gallery, expanded_prompt_accordion, expanded_prompt_display]
 
     if len(task.args) == 0:
-        # Must yield empty updates for all 6 outputs to prevent Gradio from hanging
-        yield gr.update(), gr.update(), gr.update(), gr.update(), gr.update(), gr.update()
         return
 
     execution_start_time = time.perf_counter()
     finished = False
 
-    try:
-        yield gr.update(visible=True, value=modules.html.make_progress_html(1, 'Waiting for task to start ...')), \
-            gr.update(visible=True, value=None), \
-            gr.update(visible=False, value=None), \
-            gr.update(visible=False), \
-            gr.update(), \
-            gr.update()
+    yield gr.update(visible=True, value=modules.html.make_progress_html(1, 'Waiting for task to start ...')), \
+        gr.update(visible=True, value=None), \
+        gr.update(visible=False, value=None), \
+        gr.update(visible=False), \
+        gr.update(), \
+        gr.update()
 
-        worker.async_tasks.append(task)
+    worker.async_tasks.append(task)
 
-        while not finished:
-            time.sleep(0.01)
-            if len(task.yields) > 0:
-                flag, product = task.yields.pop(0)
-                if flag == 'preview':
-                    # help bad internet connection by skipping duplicated preview
-                    if len(task.yields) > 0:  # if we have the next item
-                        if task.yields[0][0] == 'preview':   # if the next item is also a preview
-                            # print('Skipped one preview for better internet connection.')
-                            continue
+    while not finished:
+        time.sleep(0.01)
+        if len(task.yields) > 0:
+            flag, product = task.yields.pop(0)
+            if flag == 'preview':
 
-                    percentage, title, image = product
-                    yield gr.update(visible=True, value=modules.html.make_progress_html(percentage, title)), \
-                        gr.update(visible=True, value=image) if image is not None else gr.update(), \
-                        gr.update(), \
-                        gr.update(visible=False), \
-                        gr.update(), \
-                        gr.update()
-                if flag == 'results':
-                    yield gr.update(visible=True), \
-                        gr.update(visible=True), \
-                        gr.update(visible=True, value=product), \
-                        gr.update(visible=False), \
-                        gr.update(), \
-                        gr.update()
-                if flag == 'finish':
-                    if not args_manager.args.disable_enhance_output_sorting:
-                        product = sort_enhance_images(product, task)
-                    
-                    # Sort finished images backwards (last generated on top)
-                    if isinstance(product, list):
-                        product = product[::-1]
+                # help bad internet connection by skipping duplicated preview
+                if len(task.yields) > 0:  # if we have the next item
+                    if task.yields[0][0] == 'preview':   # if the next item is also a preview
+                        # print('Skipped one preview for better internet connection.')
+                        continue
 
-                    # Get expanded prompts if available (with safe check)
-                    expanded_text = ''
-                    accordion_visible = False
-                    if hasattr(task, 'expanded_prompts') and len(task.expanded_prompts) > 0:
-                        expanded_text = '\n\n'.join([f'Prompt {i+1}:\n{p}' for i, p in enumerate(task.expanded_prompts)])
-                        accordion_visible = True
+                percentage, title, image = product
+                yield gr.update(visible=True, value=modules.html.make_progress_html(percentage, title)), \
+                    gr.update(visible=True, value=image) if image is not None else gr.update(), \
+                    gr.update(), \
+                    gr.update(visible=False), \
+                    gr.update(), \
+                    gr.update()
+            if flag == 'results':
+                yield gr.update(visible=True), \
+                    gr.update(visible=True), \
+                    gr.update(visible=True, value=product), \
+                    gr.update(visible=False), \
+                    gr.update(), \
+                    gr.update()
+            if flag == 'finish':
+                if not args_manager.args.disable_enhance_output_sorting:
+                    product = sort_enhance_images(product, task)
+                
+                # Get expanded prompts if available
+                expanded_text = ''
+                accordion_visible = False
+                if len(task.expanded_prompts) > 0:
+                    expanded_text = '\n\n'.join([f'Prompt {i+1}:\n{p}' for i, p in enumerate(task.expanded_prompts)])
+                    accordion_visible = True
 
-                    yield gr.update(visible=False), \
-                        gr.update(visible=False), \
-                        gr.update(visible=False), \
-                        gr.update(visible=True, value=product), \
-                        gr.update(visible=accordion_visible), \
-                        gr.update(value=expanded_text)
-                    finished = True
-
-                    # delete Fooocus temp images, only keep gradio temp images
-                    if args_manager.args.disable_image_log:
-                        for filepath in product:
-                            if isinstance(filepath, str) and os.path.exists(filepath):
-                                os.remove(filepath)
-            elif not task.processing and len(worker.async_tasks) == 0 and not any(t == task for t in worker.async_tasks):
-                # Safety break if task is no longer processing and not in queue
+                yield gr.update(visible=False), \
+                    gr.update(visible=False), \
+                    gr.update(visible=False), \
+                    gr.update(visible=True, value=product), \
+                    gr.update(visible=accordion_visible), \
+                    gr.update(value=expanded_text)
                 finished = True
-                yield gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update()
-    except Exception as e:
-        print(f'Error in generation: {str(e)}')
-        import traceback
-        traceback.print_exc()
-        yield gr.update(visible=False), \
-            gr.update(visible=False), \
-            gr.update(visible=False), \
-            gr.update(visible=True), \
-            gr.update(visible=False), \
-            gr.update()
-        finished = True
+
+                # delete Fooocus temp images, only keep gradio temp images
+                if args_manager.args.disable_image_log:
+                    for filepath in product:
+                        if isinstance(filepath, str) and os.path.exists(filepath):
+                            os.remove(filepath)
 
     execution_time = time.perf_counter() - execution_start_time
     print(f'Total time: {execution_time:.2f} seconds')
@@ -159,7 +197,7 @@ def inpaint_mode_change(mode, inpaint_engine_version):
     if mode == modules.flags.inpaint_option_detail:
         return [
             gr.update(visible=True), gr.update(visible=False, value=[]),
-            gr.update(visible=True, samples=modules.config.example_inpaint_prompts),
+            gr.Dataset.update(visible=True, samples=modules.config.example_inpaint_prompts),
             False, 'None', 0.5, 0.0
         ]
 
@@ -175,7 +213,7 @@ def inpaint_mode_change(mode, inpaint_engine_version):
 
     return [
         gr.update(visible=False, value=''), gr.update(visible=True),
-        gr.update(visible=False, samples=modules.config.example_inpaint_prompts),
+        gr.Dataset.update(visible=False, samples=modules.config.example_inpaint_prompts),
         False, inpaint_engine_version, 1.0, 0.618
     ]
 
@@ -187,27 +225,7 @@ title = f'Fooocus {fooocus_version.version}'
 if isinstance(args_manager.args.preset, str):
     title += ' ' + args_manager.args.preset
 
-# Prepare custom JavaScript includes for Gradio v4
-import pathlib
-workspace_path = pathlib.Path(__file__).parent.absolute()
-js_files = ['script.js', 'localization.js', 'edit-attention.js', 'viewer.js', 'imageviewer.js', 'contextMenus.js', 'zoom.js']
-head_content = ""
-for js_file in js_files:
-    js_path = workspace_path / 'javascript' / js_file
-    head_content += f'<script src="file={js_path}"></script>\n'
-
-# Read CSS content for direct injection
-css_content = ""
-css_path = workspace_path / 'css' / 'style.css'
-if css_path.exists():
-    css_content = css_path.read_text(encoding='utf-8')
-
-shared.gradio_root = gr.Blocks(
-    title=title,
-    analytics_enabled=False,
-    head=head_content,
-    css=css_content
-).queue()
+shared.gradio_root = gr.Blocks(title=title).queue()
 
 with shared.gradio_root:
     currentTask = gr.State(worker.AsyncTask(args=[]))
@@ -243,11 +261,11 @@ with shared.gradio_root:
                         )
 
                 with gr.Column(scale=3, min_width=0):
-                    generate_button = gr.Button(value="Generate", elem_classes='type_row', elem_id='generate_button', visible=True)
-                    reset_button = gr.Button(value="Reconnect", elem_classes=['type_row', 'hidden'], elem_id='reset_button', visible=True)
-                    load_parameter_button = gr.Button(value="Load Parameters", elem_classes=['type_row', 'hidden'], elem_id='load_parameter_button', visible=True)
-                    skip_button = gr.Button(value="Skip", elem_classes=['type_row_half', 'hidden'], elem_id='skip_button', visible=True)
-                    stop_button = gr.Button(value="Stop", elem_classes=['type_row_half', 'hidden'], elem_id='stop_button', visible=True)
+                    generate_button = gr.Button(label="Generate", value="Generate", elem_classes='type_row', elem_id='generate_button', visible=True)
+                    reset_button = gr.Button(label="Reconnect", value="Reconnect", elem_classes='type_row', elem_id='reset_button', visible=False)
+                    load_parameter_button = gr.Button(label="Load Parameters", value="Load Parameters", elem_classes='type_row', elem_id='load_parameter_button', visible=False)
+                    skip_button = gr.Button(label="Skip", value="Skip", elem_classes='type_row_half', elem_id='skip_button', visible=False)
+                    stop_button = gr.Button(label="Stop", value="Stop", elem_classes='type_row_half', elem_id='stop_button', visible=False)
 
                     def stop_clicked(currentTask):
                         import ldm_patched.modules.model_management as model_management
@@ -263,13 +281,13 @@ with shared.gradio_root:
                             model_management.interrupt_current_processing()
                         return currentTask
 
-                    stop_button.click(stop_clicked, inputs=currentTask, outputs=currentTask, queue=False, show_progress=False, js='cancelGenerateForever')
+                    stop_button.click(stop_clicked, inputs=currentTask, outputs=currentTask, queue=False, show_progress=False, _js='cancelGenerateForever')
                     skip_button.click(skip_clicked, inputs=currentTask, outputs=currentTask, queue=False, show_progress=False)
             with gr.Row(elem_classes='advanced_check_row'):
                 input_image_checkbox = gr.Checkbox(label='Input Image', value=modules.config.default_image_prompt_checkbox, container=False, elem_classes='min_check')
                 enhance_checkbox = gr.Checkbox(label='Enhance', value=modules.config.default_enhance_checkbox, container=False, elem_classes='min_check')
                 advanced_checkbox = gr.Checkbox(label='Advanced', value=modules.config.default_advanced_checkbox, container=False, elem_classes='min_check')
-            with gr.Column(visible=modules.config.default_image_prompt_checkbox) as image_input_panel:
+            with gr.Row(visible=modules.config.default_image_prompt_checkbox) as image_input_panel:
                 with gr.Tabs(selected=modules.config.default_selected_image_input_tab_id):
                     with gr.Tab(label='Upscale or Variation', id='uov_tab') as uov_tab:
                         with gr.Row():
@@ -324,7 +342,16 @@ with shared.gradio_root:
                     with gr.Tab(label='Inpaint or Outpaint', id='inpaint_tab') as inpaint_tab:
                         with gr.Row():
                             with gr.Column():
-                                inpaint_input_image = grh.Image(label='Image', source='upload', type='numpy', tool='sketch', height=500, brush_color="#FFFFFF", elem_id='inpaint_canvas', show_label=False)
+                                inpaint_input_image = gr.ImageEditor(
+                                    label='Image',
+                                    type='numpy',
+                                    height=500,
+                                    brush=gr.Brush(colors=["#FFFFFF"], default_size=20),
+                                    elem_id='inpaint_canvas',
+                                    show_label=False,
+                                    layers=False,
+                                    sources=['upload', 'webcam', 'clipboard']
+                                )
                                 inpaint_advanced_masking_checkbox = gr.Checkbox(label='Enable Advanced Masking Features', value=modules.config.default_inpaint_advanced_masking_checkbox)
                                 inpaint_mode = gr.Dropdown(choices=modules.flags.inpaint_options, value=modules.config.default_inpaint_method, label='Method')
                                 inpaint_additional_prompt = gr.Textbox(placeholder="Describe what you want to inpaint.", elem_id='inpaint_additional_prompt', label='Inpaint Additional Prompt', visible=False)
@@ -337,7 +364,15 @@ with shared.gradio_root:
                                 example_inpaint_prompts.click(lambda x: x[0], inputs=example_inpaint_prompts, outputs=inpaint_additional_prompt, show_progress=False, queue=False)
 
                             with gr.Column(visible=modules.config.default_inpaint_advanced_masking_checkbox) as inpaint_mask_generation_col:
-                                inpaint_mask_image = grh.Image(label='Mask Upload', source='upload', type='numpy', tool='sketch', height=500, brush_color="#FFFFFF", mask_opacity=1, elem_id='inpaint_mask_canvas')
+                                inpaint_mask_image = gr.ImageEditor(
+                                    label='Mask Upload',
+                                    type='numpy',
+                                    height=500,
+                                    brush=gr.Brush(colors=["#FFFFFF"], default_size=20),
+                                    elem_id='inpaint_mask_canvas',
+                                    layers=False,
+                                    sources=['upload', 'clipboard']
+                                )
                                 invert_mask_checkbox = gr.Checkbox(label='Invert Mask When Generating', value=modules.config.default_invert_mask_checkbox)
                                 inpaint_mask_model = gr.Dropdown(label='Mask generation model',
                                                                  choices=flags.inpaint_mask_models,
@@ -389,7 +424,7 @@ with shared.gradio_root:
 
                                 inpaint_mask_model.change(lambda x: [gr.update(visible=x == 'u2net_cloth_seg')] +
                                                                     [gr.update(visible=x == 'sam')] * 2 +
-                                                                    [gr.update(visible=x == 'sam',
+                                                                    [gr.Dataset.update(visible=x == 'sam',
                                                                                        samples=modules.config.example_enhance_detection_prompts)],
                                                           inputs=inpaint_mask_model,
                                                           outputs=[inpaint_mask_cloth_category,
@@ -416,7 +451,7 @@ with shared.gradio_root:
                                     value = modules.util.get_image_size_info(image, modules.flags.sdxl_aspect_ratios)
                                     return gr.update(value=value, visible=True)
 
-                                describe_input_image.change(trigger_show_image_properties, inputs=describe_input_image,
+                                describe_input_image.upload(trigger_show_image_properties, inputs=describe_input_image,
                                                             outputs=describe_image_size, show_progress=False, queue=False)
 
                     with gr.Tab(label='Enhance', id='enhance_tab') as enhance_tab:
@@ -443,10 +478,10 @@ with shared.gradio_root:
 
                             return results
 
-                        metadata_input_image.change(trigger_metadata_preview, inputs=metadata_input_image,
+                        metadata_input_image.upload(trigger_metadata_preview, inputs=metadata_input_image,
                                                     outputs=metadata_json, queue=False, show_progress=True)
 
-            with gr.Column(visible=modules.config.default_enhance_checkbox) as enhance_input_panel:
+            with gr.Row(visible=modules.config.default_enhance_checkbox) as enhance_input_panel:
                 with gr.Tabs():
                     with gr.Tab(label='Upscale or Variation'):
                         with gr.Row():
@@ -597,29 +632,29 @@ with shared.gradio_root:
                         enhance_mask_model.change(
                             lambda x: [gr.update(visible=x == 'u2net_cloth_seg')] +
                                       [gr.update(visible=x == 'sam')] * 2 +
-                                      [gr.update(visible=x == 'sam',
+                                      [gr.Dataset.update(visible=x == 'sam',
                                                          samples=modules.config.example_enhance_detection_prompts)],
                             inputs=enhance_mask_model,
                             outputs=[enhance_mask_cloth_category, enhance_mask_dino_prompt_text, sam_options,
                                      example_enhance_mask_dino_prompt_text],
                             queue=False, show_progress=False)
 
-            switch_js = "(x) => { try { if(x){ if(typeof viewer_to_bottom === 'function') { viewer_to_bottom(100); viewer_to_bottom(500); } } else { if(typeof viewer_to_top === 'function') { viewer_to_top(); } } } catch(e) { console.error('Switch JS Error:', e); } return x; }"
-            down_js = "() => { try { if(typeof viewer_to_bottom === 'function') { viewer_to_bottom(); } } catch(e) { console.error('Down JS Error:', e); } }"
+            switch_js = "(x) => {if(x){viewer_to_bottom(100);viewer_to_bottom(500);}else{viewer_to_top();} return x;}"
+            down_js = "() => {viewer_to_bottom();}"
 
             input_image_checkbox.change(lambda x: gr.update(visible=x), inputs=input_image_checkbox,
-                                        outputs=image_input_panel, queue=False, show_progress=False, js=switch_js)
-            ip_advanced.change(lambda: None, queue=False, show_progress=False, js=down_js)
+                                        outputs=image_input_panel, queue=False, show_progress=False, _js=switch_js)
+            ip_advanced.change(lambda: None, queue=False, show_progress=False, _js=down_js)
 
             current_tab = gr.Textbox(value='uov', visible=False)
-            uov_tab.select(lambda: 'uov', outputs=current_tab, queue=False, js=down_js, show_progress=False)
-            inpaint_tab.select(lambda: 'inpaint', outputs=current_tab, queue=False, js=down_js, show_progress=False)
-            ip_tab.select(lambda: 'ip', outputs=current_tab, queue=False, js=down_js, show_progress=False)
-            describe_tab.select(lambda: 'desc', outputs=current_tab, queue=False, js=down_js, show_progress=False)
-            enhance_tab.select(lambda: 'enhance', outputs=current_tab, queue=False, js=down_js, show_progress=False)
-            metadata_tab.select(lambda: 'metadata', outputs=current_tab, queue=False, js=down_js, show_progress=False)
+            uov_tab.select(lambda: 'uov', outputs=current_tab, queue=False, _js=down_js, show_progress=False)
+            inpaint_tab.select(lambda: 'inpaint', outputs=current_tab, queue=False, _js=down_js, show_progress=False)
+            ip_tab.select(lambda: 'ip', outputs=current_tab, queue=False, _js=down_js, show_progress=False)
+            describe_tab.select(lambda: 'desc', outputs=current_tab, queue=False, _js=down_js, show_progress=False)
+            enhance_tab.select(lambda: 'enhance', outputs=current_tab, queue=False, _js=down_js, show_progress=False)
+            metadata_tab.select(lambda: 'metadata', outputs=current_tab, queue=False, _js=down_js, show_progress=False)
             enhance_checkbox.change(lambda x: gr.update(visible=x), inputs=enhance_checkbox,
-                                        outputs=enhance_input_panel, queue=False, show_progress=False, js=switch_js)
+                                        outputs=enhance_input_panel, queue=False, show_progress=False, _js=switch_js)
 
         with gr.Column(scale=1, visible=modules.config.default_advanced_checkbox) as advanced_column:
             with gr.Tab(label='Settings'):
@@ -641,8 +676,8 @@ with shared.gradio_root:
                                                        info='width × height',
                                                        elem_classes='aspect_ratios')
 
-                    aspect_ratios_selection.change(lambda x: None, inputs=aspect_ratios_selection, queue=False, show_progress=False, js='(x)=>{refresh_aspect_ratios_label(x);}')
-                    shared.gradio_root.load(lambda x: None, inputs=aspect_ratios_selection, queue=False, show_progress=False, js='(x)=>{refresh_aspect_ratios_label(x);}')
+                    aspect_ratios_selection.change(lambda x: None, inputs=aspect_ratios_selection, queue=False, show_progress=False, _js='(x)=>{refresh_aspect_ratios_label(x);}')
+                    shared.gradio_root.load(lambda x: None, inputs=aspect_ratios_selection, queue=False, show_progress=False, _js='(x)=>{refresh_aspect_ratios_label(x);}')
 
                 image_number = gr.Slider(label='Image Number', minimum=1, maximum=modules.config.default_max_image_number, step=1, value=modules.config.default_image_number)
 
@@ -679,9 +714,7 @@ with shared.gradio_root:
                     if args_manager.args.disable_image_log:
                         return gr.update(value='')
 
-                    # Use None to get default output format path
-                    path = get_current_html_path(None)
-                    return gr.update(value=f'<a href="/view_history_log?path={path}" target="_blank">\U0001F4DA History Log</a>')
+                    return gr.update(value=f'<a href="file={get_current_html_path(output_format)}" target="_blank">\U0001F4DA History Log</a>')
 
                 history_link = gr.HTML()
                 shared.gradio_root.load(update_history_link, outputs=history_link, queue=False, show_progress=False)
@@ -710,14 +743,14 @@ with shared.gradio_root:
                                         outputs=style_selections,
                                         queue=False,
                                         show_progress=False).then(
-                    lambda: None, js='()=>{refresh_style_localization();}')
+                    lambda: None, _js='()=>{refresh_style_localization();}')
 
                 gradio_receiver_style_selections.input(style_sorter.sort_styles,
                                                        inputs=style_selections,
                                                        outputs=style_selections,
                                                        queue=False,
                                                        show_progress=False).then(
-                    lambda: None, js='()=>{refresh_style_localization();}')
+                    lambda: None, _js='()=>{refresh_style_localization();}')
 
             with gr.Tab(label='Models'):
                 with gr.Group():
@@ -752,7 +785,7 @@ with shared.gradio_root:
                             lora_ctrls += [lora_enabled, lora_model, lora_weight]
 
                 with gr.Row():
-                    refresh_files = gr.Button(value='\U0001f504 Refresh All Files', variant='secondary', elem_classes='refresh_button')
+                    refresh_files = gr.Button(label='Refresh', value='\U0001f504 Refresh All Files', variant='secondary', elem_classes='refresh_button')
             with gr.Tab(label='Advanced'):
                 guidance_scale = gr.Slider(label='Guidance Scale', minimum=1.0, maximum=30.0, step=0.01,
                                            value=modules.config.default_cfg_scale,
@@ -760,182 +793,87 @@ with shared.gradio_root:
                 sharpness = gr.Slider(label='Image Sharpness', minimum=0.0, maximum=30.0, step=0.001,
                                       value=modules.config.default_sample_sharpness,
                                       info='Higher value means image and texture are sharper.')
+                use_external_llm_expansion = gr.Checkbox(label='Use External LLM for Prompt Expansion', 
+                                                        value=modules.config.default_use_external_llm_expansion,
+                                                        info='Use DeepSeek API for more advanced prompt expansion. Requires DEEPSEEK_API_KEY in config.txt file.')
+                
+                with gr.Accordion(label='DeepSeek System Prompt', open=False):
+                    deepseek_system_prompt_input = gr.Textbox(
+                        label='System Prompt for DeepSeek API',
+                        value=modules.config.deepseek_system_prompt,
+                        lines=10,
+                        placeholder='Enter the system prompt that instructs DeepSeek how to expand prompts...',
+                        info='This prompt defines how DeepSeek will expand your image generation prompts.'
+                    )
+                    with gr.Row():
+                        save_system_prompt_button = gr.Button('Save System Prompt', variant='secondary')
+                        reset_system_prompt_button = gr.Button('Reset to Default', variant='secondary')
+                    system_prompt_status = gr.Textbox(label='Status', lines=1, interactive=False, visible=False)
+                
                 gr.HTML('<a href="https://github.com/lllyasviel/Fooocus/discussions/117" target="_blank">\U0001F4D4 Documentation</a>')
                 dev_mode = gr.Checkbox(label='Developer Debug Mode', value=modules.config.default_developer_debug_mode_checkbox, container=False)
                 
                 # System prompt callbacks
-                with gr.Column(visible=modules.config.default_developer_debug_mode_checkbox) as dev_tools:
-                    with gr.Tab(label='Debug Tools'):
-                        adm_scaler_positive = gr.Slider(label='Positive ADM Guidance Scaler', minimum=0.1, maximum=3.0,
-                                                        step=0.001, value=1.5, info='The scaler multiplied to positive ADM (use 1.0 to disable). ')
-                        adm_scaler_negative = gr.Slider(label='Negative ADM Guidance Scaler', minimum=0.1, maximum=3.0,
-                                                        step=0.001, value=0.8, info='The scaler multiplied to negative ADM (use 1.0 to disable). ')
-                        adm_scaler_end = gr.Slider(label='ADM Guidance End At Step', minimum=0.0, maximum=1.0,
-                                                   step=0.001, value=0.3,
-                                                   info='When to end the guidance from positive/negative ADM. ')
+                def save_deepseek_system_prompt(prompt_text):
+                    """Save DeepSeek system prompt to config"""
+                    try:
+                        import json
+                        config_path = modules.config.config_path
+                        
+                        # Load current config
+                        with open(config_path, 'r', encoding='utf-8') as f:
+                            config_data = json.load(f)
+                        
+                        # Update system prompt
+                        config_data['deepseek_system_prompt'] = prompt_text
+                        
+                        # Save config
+                        with open(config_path, 'w', encoding='utf-8') as f:
+                            json.dump(config_data, f, indent=4)
+                        
+                        # Update runtime config
+                        modules.config.deepseek_system_prompt = prompt_text
+                        
+                        # Update the expansion instance
+                        import modules.default_pipeline as pipeline
+                        if pipeline.final_external_expansion is not None:
+                            pipeline.final_external_expansion.set_system_prompt(prompt_text)
+                        
+                        return gr.update(value='✓ System prompt saved successfully!', visible=True)
+                    except Exception as e:
+                        return gr.update(value=f'✗ Error: {str(e)}', visible=True)
+                
+                def reset_deepseek_system_prompt():
+                    """Reset system prompt to default"""
+                    default_prompt = '''You are an expert at expanding stable diffusion prompts. 
+Your task is to take a short image generation prompt and expand it into a detailed, high-quality prompt that will generate better images.
 
-                        refiner_swap_method = gr.Dropdown(label='Refiner swap method', value=flags.refiner_swap_method,
-                                                          choices=['joint', 'separate', 'vae'])
+Guidelines:
+- Add artistic and technical details (lighting, composition, style, mood)
+- Include quality enhancers (highly detailed, masterpiece, best quality, 8k, etc.)
+- Maintain the core concept of the original prompt
+- Keep it concise but descriptive (aim for 50-100 words)
+- Use comma-separated descriptive phrases
+- Do NOT add any explanations or commentary, ONLY return the expanded prompt
+- Focus on visual details that improve image quality
 
-                        adaptive_cfg = gr.Slider(label='CFG Mimicking from TSNR', minimum=1.0, maximum=30.0, step=0.01,
-                                                 value=modules.config.default_cfg_tsnr,
-                                                 info='Enabling Fooocus\'s implementation of CFG mimicking for TSNR '
-                                                      '(effective when real CFG > mimicked CFG).')
-                        clip_skip = gr.Slider(label='CLIP Skip', minimum=1, maximum=flags.clip_skip_max, step=1,
-                                                 value=modules.config.default_clip_skip,
-                                                 info='Bypass CLIP layers to avoid overfitting (use 1 to not skip any layers, 2 is recommended).')
-                        sampler_name = gr.Dropdown(label='Sampler', choices=flags.sampler_list,
-                                                   value=modules.config.default_sampler)
-                        scheduler_name = gr.Dropdown(label='Scheduler', choices=flags.scheduler_list,
-                                                     value=modules.config.default_scheduler)
-                        vae_name = gr.Dropdown(label='VAE', choices=[modules.flags.default_vae] + modules.config.vae_filenames,
-                                                     value=modules.config.default_vae, show_label=True)
-
-                        generate_image_grid = gr.Checkbox(label='Generate Image Grid for Each Batch',
-                                                          info='(Experimental) This may cause performance problems on some computers and certain internet conditions.',
-                                                          value=False)
-
-                        overwrite_step = gr.Slider(label='Forced Overwrite of Sampling Step',
-                                                   minimum=-1, maximum=200, step=1,
-                                                   value=modules.config.default_overwrite_step,
-                                                   info='Set as -1 to disable. For developer debugging.')
-                        overwrite_switch = gr.Slider(label='Forced Overwrite of Refiner Switch Step',
-                                                     minimum=-1, maximum=200, step=1,
-                                                     value=modules.config.default_overwrite_switch,
-                                                     info='Set as -1 to disable. For developer debugging.')
-                        overwrite_width = gr.Slider(label='Forced Overwrite of Generating Width',
-                                                    minimum=-1, maximum=2048, step=1, value=-1,
-                                                    info='Set as -1 to disable. For developer debugging. '
-                                                         'Results will be worse for non-standard numbers that SDXL is not trained on.')
-                        overwrite_height = gr.Slider(label='Forced Overwrite of Generating Height',
-                                                     minimum=-1, maximum=2048, step=1, value=-1,
-                                                     info='Set as -1 to disable. For developer debugging. '
-                                                          'Results will be worse for non-standard numbers that SDXL is not trained on.')
-                        overwrite_vary_strength = gr.Slider(label='Forced Overwrite of Denoising Strength of "Vary"',
-                                                            minimum=-1, maximum=1.0, step=0.001, value=-1,
-                                                            info='Set as negative number to disable. For developer debugging.')
-                        overwrite_upscale_strength = gr.Slider(label='Forced Overwrite of Denoising Strength of "Upscale"',
-                                                               minimum=-1, maximum=1.0, step=0.001,
-                                                               value=modules.config.default_overwrite_upscale,
-                                                               info='Set as negative number to disable. For developer debugging.')
-
-                        disable_preview = gr.Checkbox(label='Disable Preview', value=modules.config.default_black_out_nsfw,
-                                                      interactive=not modules.config.default_black_out_nsfw,
-                                                      info='Disable preview during generation.')
-                        disable_intermediate_results = gr.Checkbox(label='Disable Intermediate Results',
-                                                      value=flags.Performance.has_restricted_features(modules.config.default_performance),
-                                                      info='Disable intermediate results during generation, only show final gallery.')
-
-                        disable_seed_increment = gr.Checkbox(label='Disable seed increment',
-                                                             info='Disable automatic seed increment when image number is > 1.',
-                                                             value=False)
-                        read_wildcards_in_order = gr.Checkbox(label="Read wildcards in order", value=False)
-
-                        black_out_nsfw = gr.Checkbox(label='Black Out NSFW', value=modules.config.default_black_out_nsfw,
-                                                     interactive=not modules.config.default_black_out_nsfw,
-                                                     info='Use black image if NSFW is detected.')
-
-                        black_out_nsfw.change(lambda x: gr.update(value=x, interactive=not x),
-                                              inputs=black_out_nsfw, outputs=disable_preview, queue=False,
-                                              show_progress=False)
-
-                        if not args_manager.args.disable_image_log:
-                            save_final_enhanced_image_only = gr.Checkbox(label='Save only final enhanced image',
-                                                                         value=modules.config.default_save_only_final_enhanced_image)
-
-                        if not args_manager.args.disable_metadata:
-                            save_metadata_to_images = gr.Checkbox(label='Save Metadata to Images', value=modules.config.default_save_metadata_to_images,
-                                                                  info='Adds parameters to generated images allowing manual regeneration.')
-                            metadata_scheme = gr.Radio(label='Metadata Scheme', choices=flags.metadata_scheme, value=modules.config.default_metadata_scheme,
-                                                       info='Image Prompt parameters are not included. Use png and a1111 for compatibility with Civitai.',
-                                                       visible=modules.config.default_save_metadata_to_images)
-
-                            save_metadata_to_images.change(lambda x: gr.update(visible=x), inputs=[save_metadata_to_images], outputs=[metadata_scheme],
-                                                           queue=False, show_progress=False)
-
-                    with gr.Tab(label='Control'):
-                        debugging_cn_preprocessor = gr.Checkbox(label='Debug Preprocessors', value=False,
-                                                                info='See the results from preprocessors.')
-                        skipping_cn_preprocessor = gr.Checkbox(label='Skip Preprocessors', value=False,
-                                                               info='Do not preprocess images. (Inputs are already canny/depth/cropped-face/etc.)')
-
-                        mixing_image_prompt_and_vary_upscale = gr.Checkbox(label='Mixing Image Prompt and Vary/Upscale',
-                                                                           value=False)
-                        mixing_image_prompt_and_inpaint = gr.Checkbox(label='Mixing Image Prompt and Inpaint',
-                                                                      value=False)
-
-                        controlnet_softness = gr.Slider(label='Softness of ControlNet', minimum=0.0, maximum=1.0,
-                                                        step=0.001, value=0.25,
-                                                        info='Similar to the Control Mode in A1111 (use 0.0 to disable). ')
-
-                        with gr.Tab(label='Canny'):
-                            canny_low_threshold = gr.Slider(label='Canny Low Threshold', minimum=1, maximum=255,
-                                                            step=1, value=64)
-                            canny_high_threshold = gr.Slider(label='Canny High Threshold', minimum=1, maximum=255,
-                                                             step=1, value=128)
-
-                    with gr.Tab(label='Inpaint'):
-                        debugging_inpaint_preprocessor = gr.Checkbox(label='Debug Inpaint Preprocessing', value=False)
-                        debugging_enhance_masks_checkbox = gr.Checkbox(label='Debug Enhance Masks', value=False,
-                                                                       info='Show enhance masks in preview and final results')
-                        debugging_dino = gr.Checkbox(label='Debug GroundingDINO', value=False,
-                                                     info='Use GroundingDINO boxes instead of more detailed SAM masks')
-                        inpaint_disable_initial_latent = gr.Checkbox(label='Disable initial latent in inpaint', value=False)
-                        inpaint_engine = gr.Dropdown(label='Inpaint Engine',
-                                                     value=modules.config.default_inpaint_engine_version,
-                                                     choices=flags.inpaint_engine_versions,
-                                                     info='Version of Fooocus inpaint model. If set, use performance Quality or Speed (no performance LoRAs) for best results.')
-                        inpaint_strength = gr.Slider(label='Inpaint Denoising Strength',
-                                                     minimum=0.0, maximum=1.0, step=0.001, value=1.0,
-                                                     info='Same as the denoising strength in A1111 inpaint. '
-                                                          'Only used in inpaint, not used in outpaint. '
-                                                          '(Outpaint always use 1.0)')
-                        inpaint_respective_field = gr.Slider(label='Inpaint Respective Field',
-                                                             minimum=0.0, maximum=1.0, step=0.001, value=0.618,
-                                                             info='The area to inpaint. '
-                                                                  'Value 0 is same as "Only Masked" in A1111. '
-                                                                  'Value 1 is same as "Whole Image" in A1111. '
-                                                                  'Only used in inpaint, not used in outpaint. '
-                                                                  '(Outpaint always use 1.0)')
-                        inpaint_erode_or_dilate = gr.Slider(label='Mask Erode or Dilate',
-                                                            minimum=-64, maximum=64, step=1, value=0,
-                                                            info='Positive value will make white area in the mask larger, '
-                                                                 'negative value will make white area smaller. '
-                                                                 '(default is 0, always processed before any mask invert)')
-                        dino_erode_or_dilate = gr.Slider(label='GroundingDINO Box Erode or Dilate',
-                                                         minimum=-64, maximum=64, step=1, value=0,
-                                                         info='Positive value will make white area in the mask larger, '
-                                                              'negative value will make white area smaller. '
-                                                              '(default is 0, processed before SAM)')
-
-                        inpaint_mask_color = gr.ColorPicker(label='Inpaint brush color', value='#FFFFFF', elem_id='inpaint_brush_color')
-
-                        inpaint_ctrls = [debugging_inpaint_preprocessor, inpaint_disable_initial_latent, inpaint_engine,
-                                         inpaint_strength, inpaint_respective_field,
-                                         inpaint_advanced_masking_checkbox, invert_mask_checkbox, inpaint_erode_or_dilate]
-
-                        inpaint_advanced_masking_checkbox.change(lambda x: [gr.update(visible=x)] * 2,
-                                                                 inputs=inpaint_advanced_masking_checkbox,
-                                                                 outputs=[inpaint_mask_image, inpaint_mask_generation_col],
-                                                                 queue=False, show_progress=False)
-
-                        inpaint_mask_color.change(lambda x: gr.update(brush_color=x), inputs=inpaint_mask_color,
-                                                  outputs=inpaint_input_image,
-                                                  queue=False, show_progress=False)
-
-                    with gr.Tab(label='FreeU'):
-                        freeu_enabled = gr.Checkbox(label='Enabled', value=False)
-                        freeu_b1 = gr.Slider(label='B1', minimum=0, maximum=2, step=0.01, value=1.01)
-                        freeu_b2 = gr.Slider(label='B2', minimum=0, maximum=2, step=0.01, value=1.02)
-                        freeu_s1 = gr.Slider(label='S1', minimum=0, maximum=4, step=0.01, value=0.99)
-                        freeu_s2 = gr.Slider(label='S2', minimum=0, maximum=4, step=0.01, value=0.95)
-                        freeu_ctrls = [freeu_enabled, freeu_b1, freeu_b2, freeu_s1, freeu_s2]
-
-                def dev_mode_checked(r):
-                    return gr.update(visible=r)
-
-                dev_mode.change(dev_mode_checked, inputs=[dev_mode], outputs=[dev_tools],
-                                queue=False, show_progress=False)
+Example:
+Input: "a cat"
+Output: "a highly detailed cat, professional photography, natural lighting, detailed fur texture, sharp focus, high resolution, photorealistic, masterpiece quality, sitting pose, warm colors, soft bokeh background"'''
+                    return default_prompt, gr.update(value='Reset to default', visible=True)
+                
+                save_system_prompt_button.click(
+                    save_deepseek_system_prompt,
+                    inputs=[deepseek_system_prompt_input],
+                    outputs=[system_prompt_status],
+                    show_progress=False
+                )
+                
+                reset_system_prompt_button.click(
+                    reset_deepseek_system_prompt,
+                    outputs=[deepseek_system_prompt_input, system_prompt_status],
+                    show_progress=False
+                )
 
             with gr.Tab(label='CivitAI Models'):
                 gr.Markdown('### Download Models from CivitAI')
@@ -993,7 +931,8 @@ with shared.gradio_root:
                     datatype=['str', 'str', 'str'],
                     col_count=(3, 'fixed'),
                     interactive=False,
-                    wrap=True
+                    wrap=True,
+                    max_rows=20
                 )
                 
                 with gr.Row():
@@ -1112,6 +1051,174 @@ with shared.gradio_root:
                     show_progress=False
                 )
 
+            with gr.Column(visible=modules.config.default_developer_debug_mode_checkbox) as dev_tools:
+                with gr.Tab(label='Debug Tools'):
+                    adm_scaler_positive = gr.Slider(label='Positive ADM Guidance Scaler', minimum=0.1, maximum=3.0,
+                                                    step=0.001, value=1.5, info='The scaler multiplied to positive ADM (use 1.0 to disable). ')
+                    adm_scaler_negative = gr.Slider(label='Negative ADM Guidance Scaler', minimum=0.1, maximum=3.0,
+                                                    step=0.001, value=0.8, info='The scaler multiplied to negative ADM (use 1.0 to disable). ')
+                    adm_scaler_end = gr.Slider(label='ADM Guidance End At Step', minimum=0.0, maximum=1.0,
+                                               step=0.001, value=0.3,
+                                               info='When to end the guidance from positive/negative ADM. ')
+
+                    refiner_swap_method = gr.Dropdown(label='Refiner swap method', value=flags.refiner_swap_method,
+                                                      choices=['joint', 'separate', 'vae'])
+
+                    adaptive_cfg = gr.Slider(label='CFG Mimicking from TSNR', minimum=1.0, maximum=30.0, step=0.01,
+                                             value=modules.config.default_cfg_tsnr,
+                                             info='Enabling Fooocus\'s implementation of CFG mimicking for TSNR '
+                                                  '(effective when real CFG > mimicked CFG).')
+                    clip_skip = gr.Slider(label='CLIP Skip', minimum=1, maximum=flags.clip_skip_max, step=1,
+                                             value=modules.config.default_clip_skip,
+                                             info='Bypass CLIP layers to avoid overfitting (use 1 to not skip any layers, 2 is recommended).')
+                    sampler_name = gr.Dropdown(label='Sampler', choices=flags.sampler_list,
+                                               value=modules.config.default_sampler)
+                    scheduler_name = gr.Dropdown(label='Scheduler', choices=flags.scheduler_list,
+                                                 value=modules.config.default_scheduler)
+                    vae_name = gr.Dropdown(label='VAE', choices=[modules.flags.default_vae] + modules.config.vae_filenames,
+                                                 value=modules.config.default_vae, show_label=True)
+
+                    generate_image_grid = gr.Checkbox(label='Generate Image Grid for Each Batch',
+                                                      info='(Experimental) This may cause performance problems on some computers and certain internet conditions.',
+                                                      value=False)
+
+                    overwrite_step = gr.Slider(label='Forced Overwrite of Sampling Step',
+                                               minimum=-1, maximum=200, step=1,
+                                               value=modules.config.default_overwrite_step,
+                                               info='Set as -1 to disable. For developer debugging.')
+                    overwrite_switch = gr.Slider(label='Forced Overwrite of Refiner Switch Step',
+                                                 minimum=-1, maximum=200, step=1,
+                                                 value=modules.config.default_overwrite_switch,
+                                                 info='Set as -1 to disable. For developer debugging.')
+                    overwrite_width = gr.Slider(label='Forced Overwrite of Generating Width',
+                                                    minimum=-1, maximum=2048, step=1, value=-1,
+                                                    info='Set as -1 to disable. For developer debugging. '
+                                                         'Results will be worse for non-standard numbers that SDXL is not trained on.')
+                    overwrite_height = gr.Slider(label='Forced Overwrite of Generating Height',
+                                                     minimum=-1, maximum=2048, step=1, value=-1,
+                                                     info='Set as -1 to disable. For developer debugging. '
+                                                          'Results will be worse for non-standard numbers that SDXL is not trained on.')
+                    overwrite_vary_strength = gr.Slider(label='Forced Overwrite of Denoising Strength of "Vary"',
+                                                            minimum=-1, maximum=1.0, step=0.001, value=-1,
+                                                            info='Set as negative number to disable. For developer debugging.')
+                    overwrite_upscale_strength = gr.Slider(label='Forced Overwrite of Denoising Strength of "Upscale"',
+                                                               minimum=-1, maximum=1.0, step=0.001,
+                                                               value=modules.config.default_overwrite_upscale,
+                                                               info='Set as negative number to disable. For developer debugging.')
+
+                    disable_preview = gr.Checkbox(label='Disable Preview', value=modules.config.default_black_out_nsfw,
+                                                      interactive=not modules.config.default_black_out_nsfw,
+                                                      info='Disable preview during generation.')
+                    disable_intermediate_results = gr.Checkbox(label='Disable Intermediate Results',
+                                                      value=flags.Performance.has_restricted_features(modules.config.default_performance),
+                                                      info='Disable intermediate results during generation, only show final gallery.')
+
+                    disable_seed_increment = gr.Checkbox(label='Disable seed increment',
+                                                             info='Disable automatic seed increment when image number is > 1.',
+                                                             value=False)
+                    read_wildcards_in_order = gr.Checkbox(label="Read wildcards in order", value=False)
+
+                    black_out_nsfw = gr.Checkbox(label='Black Out NSFW', value=modules.config.default_black_out_nsfw,
+                                                     interactive=not modules.config.default_black_out_nsfw,
+                                                     info='Use black image if NSFW is detected.')
+
+                    black_out_nsfw.change(lambda x: gr.update(value=x, interactive=not x),
+                                              inputs=black_out_nsfw, outputs=disable_preview, queue=False,
+                                              show_progress=False)
+
+                    if not args_manager.args.disable_image_log:
+                            save_final_enhanced_image_only = gr.Checkbox(label='Save only final enhanced image',
+                                                                         value=modules.config.default_save_only_final_enhanced_image)
+
+                    if not args_manager.args.disable_metadata:
+                        save_metadata_to_images = gr.Checkbox(label='Save Metadata to Images', value=modules.config.default_save_metadata_to_images,
+                                                              info='Adds parameters to generated images allowing manual regeneration.')
+                        metadata_scheme = gr.Radio(label='Metadata Scheme', choices=flags.metadata_scheme, value=modules.config.default_metadata_scheme,
+                                                   info='Image Prompt parameters are not included. Use png and a1111 for compatibility with Civitai.',
+                                                   visible=modules.config.default_save_metadata_to_images)
+
+                        save_metadata_to_images.change(lambda x: gr.update(visible=x), inputs=[save_metadata_to_images], outputs=[metadata_scheme],
+                                                       queue=False, show_progress=False)
+
+                with gr.Tab(label='Control'):
+                    debugging_cn_preprocessor = gr.Checkbox(label='Debug Preprocessors', value=False,
+                                                            info='See the results from preprocessors.')
+                    skipping_cn_preprocessor = gr.Checkbox(label='Skip Preprocessors', value=False,
+                                                           info='Do not preprocess images. (Inputs are already canny/depth/cropped-face/etc.)')
+
+                    mixing_image_prompt_and_vary_upscale = gr.Checkbox(label='Mixing Image Prompt and Vary/Upscale',
+                                                                           value=False)
+                    mixing_image_prompt_and_inpaint = gr.Checkbox(label='Mixing Image Prompt and Inpaint',
+                                                                      value=False)
+
+                    controlnet_softness = gr.Slider(label='Softness of ControlNet', minimum=0.0, maximum=1.0,
+                                                        step=0.001, value=0.25,
+                                                        info='Similar to the Control Mode in A1111 (use 0.0 to disable). ')
+
+                with gr.Tab(label='Canny'):
+                            canny_low_threshold = gr.Slider(label='Canny Low Threshold', minimum=1, maximum=255,
+                                                            step=1, value=64)
+                            canny_high_threshold = gr.Slider(label='Canny High Threshold', minimum=1, maximum=255,
+                                                             step=1, value=128)
+
+                with gr.Tab(label='Inpaint'):
+                    debugging_inpaint_preprocessor = gr.Checkbox(label='Debug Inpaint Preprocessing', value=False)
+                    debugging_enhance_masks_checkbox = gr.Checkbox(label='Debug Enhance Masks', value=False,
+                                                                       info='Show enhance masks in preview and final results')
+                    debugging_dino = gr.Checkbox(label='Debug GroundingDINO', value=False,
+                                                     info='Use GroundingDINO boxes instead of more detailed SAM masks')
+                    inpaint_disable_initial_latent = gr.Checkbox(label='Disable initial latent in inpaint', value=False)
+                    inpaint_engine = gr.Dropdown(label='Inpaint Engine',
+                                                     value=modules.config.default_inpaint_engine_version,
+                                                     choices=flags.inpaint_engine_versions,
+                                                     info='Version of Fooocus inpaint model. If set, use performance Quality or Speed (no performance LoRAs) for best results.')
+                    inpaint_strength = gr.Slider(label='Inpaint Denoising Strength',
+                                                     minimum=0.0, maximum=1.0, step=0.001, value=1.0,
+                                                     info='Same as the denoising strength in A1111 inpaint. '
+                                                          'Only used in inpaint, not used in outpaint. '
+                                                          '(Outpaint always use 1.0)')
+                    inpaint_respective_field = gr.Slider(label='Inpaint Respective Field',
+                                                             minimum=0.0, maximum=1.0, step=0.001, value=0.618,
+                                                             info='The area to inpaint. '
+                                                                  'Value 0 is same as "Only Masked" in A1111. '
+                                                                  'Value 1 is same as "Whole Image" in A1111. '
+                                                                  'Only used in inpaint, not used in outpaint. '
+                                                                  '(Outpaint always use 1.0)')
+                    inpaint_erode_or_dilate = gr.Slider(label='Mask Erode or Dilate',
+                                                            minimum=-64, maximum=64, step=1, value=0,
+                                                            info='Positive value will make white area in the mask larger, '
+                                                                 'negative value will make white area smaller. '
+                                                                 '(default is 0, always processed before any mask invert)')
+                    dino_erode_or_dilate = gr.Slider(label='GroundingDINO Box Erode or Dilate',
+                                                         minimum=-64, maximum=64, step=1, value=0,
+                                                         info='Positive value will make white area in the mask larger, '
+                                                              'negative value will make white area smaller. '
+                                                              '(default is 0, processed before SAM)')
+
+                    inpaint_mask_color = gr.ColorPicker(label='Inpaint brush color', value='#FFFFFF', elem_id='inpaint_brush_color', visible=False, info='Brush color is fixed to white for better mask visibility')
+
+                    inpaint_ctrls = [debugging_inpaint_preprocessor, inpaint_disable_initial_latent, inpaint_engine,
+                                         inpaint_strength, inpaint_respective_field,
+                                         inpaint_advanced_masking_checkbox, invert_mask_checkbox, inpaint_erode_or_dilate]
+
+                    inpaint_advanced_masking_checkbox.change(lambda x: [gr.update(visible=x)] * 2,
+                                                                 inputs=inpaint_advanced_masking_checkbox,
+                                                                 outputs=[inpaint_mask_image, inpaint_mask_generation_col],
+                                                                 queue=False, show_progress=False)
+
+                with gr.Tab(label='FreeU'):
+                    freeu_enabled = gr.Checkbox(label='Enabled', value=False)
+                    freeu_b1 = gr.Slider(label='B1', minimum=0, maximum=2, step=0.01, value=1.01)
+                    freeu_b2 = gr.Slider(label='B2', minimum=0, maximum=2, step=0.01, value=1.02)
+                    freeu_s1 = gr.Slider(label='S1', minimum=0, maximum=4, step=0.01, value=0.99)
+                    freeu_s2 = gr.Slider(label='S2', minimum=0, maximum=4, step=0.01, value=0.95)
+                    freeu_ctrls = [freeu_enabled, freeu_b1, freeu_b2, freeu_s1, freeu_s2]
+
+                def dev_mode_checked(r):
+                    return gr.update(visible=r)
+
+                    dev_mode.change(dev_mode_checked, inputs=[dev_mode], outputs=[dev_tools],
+                                queue=False, show_progress=False)
 
                 def refresh_files_clicked():
                     modules.config.update_files()
@@ -1179,7 +1286,7 @@ with shared.gradio_root:
 
             preset_selection.change(preset_selection_change, inputs=[preset_selection, state_is_generating, inpaint_mode], outputs=load_data_outputs, queue=False, show_progress=True) \
                 .then(fn=style_sorter.sort_styles, inputs=style_selections, outputs=style_selections, queue=False, show_progress=False) \
-                .then(lambda: None, js='()=>{refresh_style_localization();}') \
+                .then(lambda: None, _js='()=>{refresh_style_localization();}') \
                 .then(inpaint_engine_state_change, inputs=[inpaint_engine_state] + enhance_inpaint_mode_ctrls, outputs=enhance_inpaint_engine_ctrls, queue=False, show_progress=False)
 
         performance_selection.change(lambda x: [gr.update(interactive=not flags.Performance.has_restricted_features(x))] * 11 +
@@ -1196,7 +1303,7 @@ with shared.gradio_root:
 
         advanced_checkbox.change(lambda x: gr.update(visible=x), advanced_checkbox, advanced_column,
                                  queue=False, show_progress=False) \
-            .then(fn=lambda: None, js='refresh_grid_delayed', queue=False, show_progress=False)
+            .then(fn=lambda: None, _js='refresh_grid_delayed', queue=False, show_progress=False)
 
         inpaint_mode.change(inpaint_mode_change, inputs=[inpaint_mode, inpaint_engine_state], outputs=[
             inpaint_additional_prompt, outpaint_selections, example_inpaint_prompts,
@@ -1251,6 +1358,7 @@ with shared.gradio_root:
                   enhance_input_image, enhance_checkbox, enhance_uov_method, enhance_uov_processing_order,
                   enhance_uov_prompt_type]
         ctrls += enhance_ctrls
+        ctrls += [use_external_llm_expansion]  # Add external LLM expansion checkbox
 
         def parse_meta(raw_prompt_txt, is_generating):
             loaded_json = None
@@ -1261,9 +1369,9 @@ with shared.gradio_root:
                 if is_generating:
                     return gr.update(), gr.update(), gr.update()
                 else:
-                    return gr.update(), gr.update(elem_classes=['type_row']), gr.update(elem_classes=['type_row', 'hidden'])
+                    return gr.update(), gr.update(visible=True), gr.update(visible=False)
 
-            return json.dumps(loaded_json), gr.update(elem_classes=['type_row', 'hidden']), gr.update(elem_classes=['type_row'])
+            return json.dumps(loaded_json), gr.update(visible=False), gr.update(visible=True)
 
         prompt.input(parse_meta, inputs=[prompt, state_is_generating], outputs=[prompt, generate_button, load_parameter_button], queue=False, show_progress=False)
 
@@ -1283,20 +1391,18 @@ with shared.gradio_root:
         metadata_import_button.click(trigger_metadata_import, inputs=[metadata_input_image, state_is_generating], outputs=load_data_outputs, queue=False, show_progress=True) \
             .then(style_sorter.sort_styles, inputs=style_selections, outputs=style_selections, queue=False, show_progress=False)
 
-        generate_button.click(lambda: (gr.update(elem_classes=['type_row_half'], interactive=True), gr.update(elem_classes=['type_row_half'], interactive=True), gr.update(elem_classes=['type_row', 'hidden'], interactive=False), [], True),
+        generate_button.click(lambda: (gr.update(visible=True, interactive=True), gr.update(visible=True, interactive=True), gr.update(visible=False, interactive=False), [], True),
                               outputs=[stop_button, skip_button, generate_button, gallery, state_is_generating]) \
             .then(fn=refresh_seed, inputs=[seed_random, image_seed], outputs=image_seed) \
             .then(fn=get_task, inputs=ctrls, outputs=currentTask) \
             .then(fn=generate_clicked, inputs=currentTask, outputs=[progress_html, progress_window, progress_gallery, gallery, expanded_prompt_accordion, expanded_prompt_display]) \
-            .then(lambda: (gr.update(elem_classes=['type_row'], interactive=True), gr.update(elem_classes=['type_row_half', 'hidden'], interactive=False), gr.update(elem_classes=['type_row_half', 'hidden'], interactive=False), False),
+            .then(lambda: (gr.update(visible=True, interactive=True), gr.update(visible=False, interactive=False), gr.update(visible=False, interactive=False), False),
                   outputs=[generate_button, stop_button, skip_button, state_is_generating]) \
             .then(fn=update_history_link, outputs=history_link) \
-            .then(fn=lambda: None, js='playNotification').then(fn=lambda: None, js='refresh_grid_delayed')
+            .then(fn=lambda: None, _js='playNotification').then(fn=lambda: None, _js='refresh_grid_delayed')
 
-        reset_button.click(lambda: [worker.AsyncTask(args=[]), False, gr.update(elem_classes=['type_row'], interactive=True)] +
-                                   [gr.update(elem_classes=['type_row', 'hidden'])] +
-                                   [gr.update(elem_classes=['type_row_half', 'hidden'])] * 2 +
-                                   [gr.update(visible=False)] * 4 +
+        reset_button.click(lambda: [worker.AsyncTask(args=[]), False, gr.update(visible=True, interactive=True)] +
+                                   [gr.update(visible=False)] * 6 +
                                    [gr.update(visible=True, value=[])],
                            outputs=[currentTask, state_is_generating, generate_button,
                                     reset_button, stop_button, skip_button,
@@ -1337,7 +1443,7 @@ with shared.gradio_root:
         describe_btn.click(trigger_describe, inputs=[describe_methods, describe_input_image, describe_apply_styles],
                            outputs=[prompt, style_selections], show_progress=True, queue=True) \
             .then(fn=style_sorter.sort_styles, inputs=style_selections, outputs=style_selections, queue=False, show_progress=False) \
-            .then(lambda: None, js='()=>{refresh_style_localization();}')
+            .then(lambda: None, _js='()=>{refresh_style_localization();}')
 
         if args_manager.args.enable_auto_describe_image:
             def trigger_auto_describe(mode, img, prompt, apply_styles):
@@ -1346,16 +1452,16 @@ with shared.gradio_root:
                     return trigger_describe(mode, img, apply_styles)
                 return gr.update(), gr.update()
 
-            uov_input_image.change(trigger_auto_describe, inputs=[describe_methods, uov_input_image, prompt, describe_apply_styles],
+            uov_input_image.upload(trigger_auto_describe, inputs=[describe_methods, uov_input_image, prompt, describe_apply_styles],
                                    outputs=[prompt, style_selections], show_progress=True, queue=True) \
                 .then(fn=style_sorter.sort_styles, inputs=style_selections, outputs=style_selections, queue=False, show_progress=False) \
-                .then(lambda: None, js='()=>{refresh_style_localization();}')
+                .then(lambda: None, _js='()=>{refresh_style_localization();}')
 
-            enhance_input_image.change(lambda: gr.update(value=True), outputs=enhance_checkbox, queue=False, show_progress=False) \
+            enhance_input_image.upload(lambda: gr.update(value=True), outputs=enhance_checkbox, queue=False, show_progress=False) \
                 .then(trigger_auto_describe, inputs=[describe_methods, enhance_input_image, prompt, describe_apply_styles],
                       outputs=[prompt, style_selections], show_progress=True, queue=True) \
                 .then(fn=style_sorter.sort_styles, inputs=style_selections, outputs=style_selections, queue=False, show_progress=False) \
-                .then(lambda: None, js='()=>{refresh_style_localization();}')
+                .then(lambda: None, _js='()=>{refresh_style_localization();}')
 
 def dump_default_english_config():
     from modules.localization import dump_english_config
@@ -1364,66 +1470,12 @@ def dump_default_english_config():
 
 # dump_default_english_config()
 
-# Create the app manually to add custom routes for viewing logs
-def setup_custom_routes(app):
-    @app.get("/view_history_log")
-    async def view_history_log(path: str):
-        import os
-        from fastapi.responses import FileResponse
-        from fastapi import HTTPException
-        
-        # Security: check if path is within outputs directory or temp directory
-        abs_path = os.path.abspath(path)
-        abs_outputs = os.path.abspath(modules.config.path_outputs)
-        abs_temp = os.path.abspath(modules.config.temp_path)
-        
-        if not (abs_path.startswith(abs_outputs) or abs_path.startswith(abs_temp)):
-             raise HTTPException(status_code=403, detail="Access denied")
-             
-        if os.path.exists(abs_path) and abs_path.endswith(".html"):
-            return FileResponse(abs_path, media_type="text/html")
-        raise HTTPException(status_code=404, detail="File not found")
-
-    @app.get("/view_log_image")
-    async def view_log_image(path: str):
-        import os
-        from fastapi.responses import FileResponse
-        from fastapi import HTTPException
-        
-        # Security: check if path is within outputs directory or temp directory
-        abs_path = os.path.abspath(path)
-        abs_outputs = os.path.abspath(modules.config.path_outputs)
-        abs_temp = os.path.abspath(modules.config.temp_path)
-        
-        if not (abs_path.startswith(abs_outputs) or abs_path.startswith(abs_temp)):
-             raise HTTPException(status_code=403, detail="Access denied")
-             
-        if os.path.exists(abs_path) and abs_path.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
-            return FileResponse(abs_path)
-        raise HTTPException(status_code=404, detail="Image not found")
-
-# Use Blocks.launch with a custom app setup
-from fastapi import FastAPI
-from gradio.routes import App
-
-# Gradio launch will create the app if it doesn't exist, but we need to inject routes
-# before it starts listening. We can do this by patching the App class or using a wrapper.
-
-original_create_app = App.create_app
-
-def patched_create_app(*args, **kwargs):
-    app = original_create_app(*args, **kwargs)
-    setup_custom_routes(app)
-    return app
-
-App.create_app = patched_create_app
-
 shared.gradio_root.launch(
     inbrowser=args_manager.args.in_browser,
     server_name=args_manager.args.listen,
     server_port=args_manager.args.port,
     share=args_manager.args.share,
     auth=check_auth if (args_manager.args.share or args_manager.args.listen) and auth_enabled else None,
-    allowed_paths=[modules.config.path_outputs, 'javascript', 'css'],
+    allowed_paths=[modules.config.path_outputs],
     blocked_paths=[constants.AUTH_FILENAME]
 )
