@@ -2,7 +2,6 @@
     "default_model": "CyberRealisticXLPlay_V8.0_FP32.safetensors",
     "default_refiner": "None",
     "default_refiner_switch": 0.5,
-    "default_vae": "CyberRealisticXLPlay_V2.4-VAE.safetensors",
     "default_loras": [
         [
             true,
@@ -50,9 +49,6 @@
     "embeddings_downloads": {},
     "lora_downloads": {
         "sd_xl_offset_example-lora_1.0.safetensors": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_offset_example-lora_1.0.safetensors"
-    },
-    "vae_downloads": {
-        "CyberRealisticXLPlay_V2.4-VAE.safetensors": "https://huggingface.co/cyberdelia/CyberRealisticXL/resolve/main/CyberRealisticXLPlay_V2.4-VAE.safetensors"
     },
     "previous_default_models": [
         "juggernautXL_v8Rundiffusion.safetensors",
