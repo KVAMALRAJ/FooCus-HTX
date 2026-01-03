@@ -420,3 +420,14 @@ div:has(> #positive_prompt) {
 #inpaint_brush_color input[type=color]{
   background: none;
 }
+
+/* Drag and drop visual feedback */
+.drag-over {
+  border: 2px dashed #3498db !important;
+  background-color: rgba(52, 152, 219, 0.1) !important;
+  transition: all 0.2s ease;
+}
+
+.image-container, [data-testid="image"], .upload-container {
+  transition: border 0.2s ease, background-color 0.2s ease;
+}

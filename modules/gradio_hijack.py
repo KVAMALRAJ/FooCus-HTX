@@ -240,6 +240,8 @@ class Image(
             "mask_opacity": self.mask_opacity,
             "show_share_button": self.show_share_button,
             "show_download_button": self.show_download_button,
+            "enable_clipboard": True,  # Enable clipboard paste
+            "enable_drag_drop": True,  # Enable drag and drop
         }
         if hasattr(self, 'selectable'):
             config["selectable"] = self.selectable
