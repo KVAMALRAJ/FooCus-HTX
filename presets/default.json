@@ -1,5 +1,5 @@
 {
-    "default_model": "realvisxlV40.safetensors",
+    "default_model": "cyberrealisticXL_v21.safetensors",
     "default_refiner": "None",
     "default_refiner_switch": 0.5,
     "default_loras": [
@@ -44,7 +44,7 @@
     "default_aspect_ratio": "1152*896",
     "default_overwrite_step": -1,
     "checkpoint_downloads": {
-        "realvisxlV40.safetensors": "https://civitai.com/api/download/models/501240?type=Model&format=SafeTensor&size=pruned&fp=fp16"
+        "cyberrealisticXL_v21.safetensors": "https://civitai.com/api/download/models/742314?type=Model&format=SafeTensor&size=pruned&fp=fp16"
     },
     "embeddings_downloads": {},
     "lora_downloads": {

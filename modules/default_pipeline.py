@@ -47,7 +47,13 @@ def refresh_controlnets(model_paths):
 def assert_model_integrity():
     error_message = None
 
-    if not isinstance(model_base.unet_with_lora.model, SDXL):
+    if model_base.unet_with_lora is None:
+        error_message = 'Base model UNet is not loaded.'
+    elif not hasattr(model_base.unet_with_lora, 'model'):
+        error_message = 'Base model UNet does not have model attribute.'
+    elif model_base.unet_with_lora.model is None:
+        error_message = 'Base model UNet model is None.'
+    elif not isinstance(model_base.unet_with_lora.model, SDXL):
         error_message = 'You have selected base model other than SDXL. This is not supported yet.'
 
     if error_message is not None:
